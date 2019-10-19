@@ -1,6 +1,6 @@
 
 
-# PyTorch-SSO
+# PyTorch-SSO (alpha release)
 
 Scalable Second-Order methods in PyTorch.
 
