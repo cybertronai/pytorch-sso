@@ -120,6 +120,19 @@ class Curvature(object):
 
         data_input = input[0].detach()
 
+        if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+            bnorm = type(module)(num_features=module.num_features)
+            bnorm.load_state_dict(module.state_dict())
+            assert module.affine
+            device = next(module.parameters()).device
+            bnorm.to(device)
+
+            # rerun normalization
+            bnorm.weight = None
+            bnorm.bias = None
+            data_input_norm = bnorm(data_input)
+            data_input = data_input_norm
+
         setattr(module, 'data_input', data_input)
         setattr(module, 'data_output', output)
 

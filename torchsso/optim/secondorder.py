@@ -113,6 +113,8 @@ class SecondOrderOptimizer(Optimizer):
             if len(list(module.children())) > 0:
                 continue
             params = list(module.parameters())
+            if len(params) == 0:
+                continue
 
             curv_class = self.get_curv_class(module)
             curvature = curv_class(module, **curv_kwargs)
