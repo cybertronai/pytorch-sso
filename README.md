@@ -14,6 +14,7 @@ Scalable Second-Order methods in PyTorch.
   - [[paper (preprint)](https://arxiv.org/abs/1906.02506)]
 
 ## Scalable Second-Order Optimization
+![](docs/overview.png)
 
 ### Optimizers
 
@@ -45,8 +46,6 @@ Refer [Information matrices and generalization](https://arxiv.org/abs/1906.07774
 Refer Section 6 of [Optimization Methods for Large-Scale Machine Learning](https://arxiv.org/abs/1606.04838) by L´eon Bottou et al. (2018) for a clear explanation of the second-order optimzation using these matrices as curvature.
 
 ### Approximation Methods
-
-![](docs/overview.png)
 
 PyTorch-SSO calculates the curvature as a layer-wise block-diagonal matrix. 
 
