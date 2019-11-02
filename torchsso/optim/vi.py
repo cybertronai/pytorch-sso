@@ -200,7 +200,12 @@ class VIOptimizer(SecondOrderOptimizer):
             loss, output = closure()
 
             acc_loss.update(loss, scale=1/m)
-            prob = F.softmax(output, dim=1)
+            if output.ndim == 2:
+                prob = F.softmax(output, dim=1)
+            elif output.ndim == 1:
+                prob = torch.sigmoid(output)
+            else:
+                raise ValueError(f'Invalid ndim {output.ndim}')
             acc_prob.update(prob, scale=1/n)
 
             # accumulate
@@ -252,12 +257,14 @@ class VIOptimizer(SecondOrderOptimizer):
 
         return loss, prob
 
-    def prediction(self, data):
+    def prediction(self, data, mc=None, keep_probs=False):
 
         self.set_random_seed(self.optim_state['step'])
 
         acc_prob = TensorAccumulator()
-        mc_samples = self.defaults['val_num_mc_samples']
+        probs = []
+
+        mc_samples = self.defaults['val_num_mc_samples'] if mc is None else mc
 
         use_mean = mc_samples == 0
         n = 1 if use_mean else mc_samples
@@ -271,14 +278,25 @@ class VIOptimizer(SecondOrderOptimizer):
                 self.sample_params()
 
             output = self.model(data)
-            prob = F.softmax(output, dim=1)
+            if output.ndim == 2:
+                prob = F.softmax(output, dim=1)
+            elif output.ndim == 1:
+                prob = torch.sigmoid(output)
+            else:
+                raise ValueError(f'Invalid ndim {output.ndim}')
+
             acc_prob.update(prob, scale=1/n)
+            if keep_probs:
+                probs.append(prob)
 
         self.copy_mean_to_params()
 
         prob = acc_prob.get()
 
-        return prob
+        if keep_probs:
+            return prob, probs
+        else:
+            return prob
 
 
 class DistributedVIOptimizer(DistributedSecondOrderOptimizer, VIOptimizer):
