@@ -299,6 +299,26 @@ class VIOptimizer(SecondOrderOptimizer):
             return prob
 
 
+class VOGN(VIOptimizer):
+
+    def __init__(self, *args, **kwargs):
+        default_kwargs = dict(lr=1e-3,
+                              curv_type='Cov',
+                              curv_shapes={
+                                  'Linear': 'Diag',
+                                  'Conv2d': 'Diag',
+                                  'BatchNorm1d': 'Diag',
+                                  'BatchNorm2d': 'Diag'
+                              },
+                              curv_kwargs={'ema_decay': 0.01, 'damping': 1e-7},
+                              warmup_kl_weighting_init=0.01, warmup_kl_weighting_steps=1000,
+                              grad_ema_decay=0.1, num_mc_samples=50, val_num_mc_samples=100)
+
+        default_kwargs.update(kwargs)
+
+        super(VOGN, self).__init__(*args, **default_kwargs)
+
+
 class DistributedVIOptimizer(DistributedSecondOrderOptimizer, VIOptimizer):
 
     def __init__(self, *args, mc_group_id=0, **kwargs):
