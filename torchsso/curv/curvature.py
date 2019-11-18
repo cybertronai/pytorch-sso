@@ -121,16 +121,16 @@ class Curvature(object):
         data_input = input[0].detach()
 
         if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
-            bnorm = type(module)(num_features=module.num_features)
-            bnorm.load_state_dict(module.state_dict())
-            assert module.affine
-            device = next(module.parameters()).device
-            bnorm.to(device)
-
-            # rerun normalization
-            bnorm.weight = None
-            bnorm.bias = None
-            data_input_norm = bnorm(data_input)
+            bnorm = module
+            f = bnorm.num_features
+            if isinstance(module, nn.BatchNorm1d):
+                shape = (1, f)
+            elif isinstance(module, nn.BatchNorm2d):
+                shape = (1, f, 1, 1)
+            else:
+                shape = (1, f, 1, 1, 1)
+            # restore normalized input
+            data_input_norm = (output - bnorm.bias.view(shape)).div(bnorm.weight.view(shape))
             data_input = data_input_norm
 
         setattr(module, 'data_input', data_input)
