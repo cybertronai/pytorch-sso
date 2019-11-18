@@ -45,7 +45,7 @@ def test_samplegrad():
         print(module)
         for p in module.parameters():
             if p.requires_grad:
-                error = (p.grads.mean(0) - p.grad).max()
+                error = (p.grads.sum(0) - p.grad).max()
                 print(f'\t{p.size()} : error = {error}')
 
 

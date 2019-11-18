@@ -60,12 +60,6 @@ def _backward_postprocess(module: nn.Module, grad_input: torch.Tensor, grad_outp
     else:
         raise ValueError(f'Unsupported module class: {module.__class__}.')
 
-    # adjust grad scale along with 'reduction' in loss function
-    batch_size = data_input.size(0)
-    for param in module.parameters():
-        if param.requires_grad:
-            param.grads *= batch_size
-
 
 def grad_linear(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
 
