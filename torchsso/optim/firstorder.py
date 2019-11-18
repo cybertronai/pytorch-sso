@@ -54,5 +54,7 @@ class DistributedFirstOrderOptimizer(Optimizer):
         return getattr(self.actual_optimizer, item)
 
     def __setattr__(self, key, value):
-        setattr(self.actual_optimizer, key, value)
-
+        if key == 'step':
+            super().__setattr__(key, value)
+        else:
+            setattr(self.actual_optimizer, key, value)

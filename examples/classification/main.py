@@ -256,9 +256,6 @@ def train(model, device, train_loader, optimizer, scheduler, epoch, args, logger
             return 'none'
         return getattr(_scheduler, 'scheduler_type', 'epoch')
 
-    if scheduler_type(scheduler) == 'epoch':
-        scheduler.step(epoch - 1)
-
     model.train()
 
     total_correct = 0
@@ -271,9 +268,6 @@ def train(model, device, train_loader, optimizer, scheduler, epoch, args, logger
 
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
-
-        if scheduler_type(scheduler) == 'iter':
-            scheduler.step()
 
         for name, param in model.named_parameters():
             attr = 'p_pre_{}'.format(name)
@@ -313,6 +307,9 @@ def train(model, device, train_loader, optimizer, scheduler, epoch, args, logger
         iteration = base_num_iter + batch_idx + 1
         total_data_size += len(data)
 
+        if scheduler_type(scheduler) == 'iter':
+            scheduler.step()
+
         if batch_idx % args.log_interval == 0:
             accuracy = 100. * total_correct / total_data_size
             elapsed_time = logger.elapsed_time
@@ -342,6 +339,9 @@ def train(model, device, train_loader, optimizer, scheduler, epoch, args, logger
                 log[name] = p_log
 
             logger.write(log)
+
+    if scheduler_type(scheduler) == 'epoch':
+        scheduler.step(epoch - 1)
 
     accuracy = 100. * total_correct / epoch_size
     confidence['top1'] /= epoch_size
