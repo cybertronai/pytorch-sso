@@ -74,7 +74,7 @@ def grad_linear(module: nn.Module, data_input: torch.Tensor, grad_output: torch.
         grads = torch.einsum('bi,bj->bij', grad_output, data_input)  # n x f_out x f_in
         setattr(linear.weight, 'grads', grads)  # n x f_out x f_in
 
-    if hasattr(linear, 'bias') and linear.bias.requires_grad:
+    if linear.bias is not None and linear.bias.requires_grad:
         setattr(linear.bias, 'grads', grad_output)  # n x f_out
 
 
@@ -101,7 +101,7 @@ def grad_conv2d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.
         grads_2d = torch.einsum('bik,bjk->bij', grad_output2d, input2d)  # n x c_out x (c_in)(k_h)(k_w)
         setattr(conv2d.weight, 'grads', grads_2d.view(n, c_out, c_in, k_h, k_w))  # n x c_out x c_in x k_h x k_w
 
-    if hasattr(conv2d, 'bias') and conv2d.bias.requires_grad:
+    if conv2d.bias is not None and conv2d.bias.requires_grad:
         setattr(conv2d.bias, 'grads', grad_output.sum(dim=(2, 3)))  # n x c_out
 
 
