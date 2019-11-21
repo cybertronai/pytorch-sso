@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from torchsso.utils import im2col_2d, im2col_3d
 
 
 def forward_postprocess(module, input, output):
@@ -67,9 +67,7 @@ def grad_conv2d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.
 
     if conv2d.weight.requires_grad:
         # n x (c_in)(k_h)(k_w) x (h_out)(w_out)
-        input2d = F.unfold(data_input,
-                           kernel_size=conv2d.kernel_size, stride=conv2d.stride,
-                           padding=conv2d.padding, dilation=conv2d.dilation)
+        input2d = im2col_2d(data_input, conv2d)
 
         # n x c_out x h_out x w_out
         n, c_out, h, w = grad_output.size()
@@ -99,11 +97,7 @@ def grad_conv_transpose2d(module: nn.Module, data_input: torch.Tensor, grad_outp
         input2d = data_input.view(n, c_in, -1)
 
         # n x (c_out)(k_h)(k_w) x (h_in)(w_in)
-        grad_output2d = F.unfold(grad_output,
-                                 kernel_size=conv_transpose2d.kernel_size,
-                                 stride=conv_transpose2d.stride,
-                                 padding=conv_transpose2d.padding,
-                                 dilation=conv_transpose2d.dilation)
+        grad_output2d = im2col_2d(grad_output, conv_transpose2d)
 
         c_in, c_out, k_h, k_w = conv_transpose2d.weight.size()
 
