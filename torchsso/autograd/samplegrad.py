@@ -23,7 +23,7 @@ def save_sample_grads(model: nn.Module):
         handle.remove()
 
 
-def _forward_postprocess(module: nn.Module, input: torch.Tensor, output: torch.Tensor):
+def _forward_postprocess(module, input, output):
     data_input = input[0].clone().detach()
 
     if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
@@ -42,7 +42,7 @@ def _forward_postprocess(module: nn.Module, input: torch.Tensor, output: torch.T
     setattr(module, 'data_input', data_input)
 
 
-def _backward_postprocess(module: nn.Module, grad_input: torch.Tensor, grad_output: torch.Tensor):
+def _backward_postprocess(module, grad_input, grad_output):
     grad_output = grad_output[0].clone().detach()
     data_input = getattr(module, 'data_input', None)
     assert data_input is not None, 'backward is called before forward.'
