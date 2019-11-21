@@ -1,1 +1,1 @@
-from torchsso.autograd.samplegrad import *  # NOQA
+from torchsso.autograd.gradient import *  # NOQA
