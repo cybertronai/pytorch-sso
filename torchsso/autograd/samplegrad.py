@@ -53,6 +53,8 @@ def _backward_postprocess(module: nn.Module, grad_input: torch.Tensor, grad_outp
         grad_linear(*args)
     elif isinstance(module, nn.Conv2d):
         grad_conv2d(*args)
+    elif isinstance(module, nn.ConvTranspose2d):
+        grad_conv_transpose2d(*args)
     elif isinstance(module, nn.BatchNorm1d):
         grad_batchnorm1d(*args)
     elif isinstance(module, nn.BatchNorm2d):
@@ -101,6 +103,37 @@ def grad_conv2d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.
 
     if hasattr(conv2d, 'bias') and conv2d.bias.requires_grad:
         setattr(conv2d.bias, 'grads', grad_output.sum(dim=(2, 3)))  # n x c_out
+
+
+def grad_conv_transpose2d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
+
+    assert isinstance(module, nn.ConvTranspose2d)
+    conv_transpose2d = module
+    assert data_input.ndimension() == 4  # n x c_in x h_in x w_in
+    assert grad_output.ndimension() == 4  # n x c_out x h_out x w_out
+
+    if conv_transpose2d.weight.requires_grad:
+        n, c_in, h, w = data_input.size()
+
+        # n x c_in x (h_in)(w_in)
+        input2d = data_input.view(n, c_in, -1)
+
+        # n x (c_out)(k_h)(k_w) x (h_in)(w_in)
+        grad_output2d = F.unfold(grad_output,
+                                 kernel_size=conv_transpose2d.kernel_size,
+                                 stride=conv_transpose2d.stride,
+                                 padding=conv_transpose2d.padding,
+                                 dilation=conv_transpose2d.dilation)
+
+        c_in, c_out, k_h, k_w = conv_transpose2d.weight.size()
+
+        # n x c_in x (c_out)(k_h)(k_w)
+        grads_2d = torch.einsum('bik,bjk->bij', input2d, grad_output2d)
+        # n x c_in x c_out x k_h x k_w
+        setattr(conv_transpose2d.weight, 'grads', grads_2d.view(n, c_in, c_out, k_h, k_w))
+
+    if conv_transpose2d.bias is not None and conv_transpose2d.bias.requires_grad:
+        setattr(conv_transpose2d.bias, 'grads', grad_output.sum(dim=(2, 3)))  # n x c_in
 
 
 def grad_batchnorm1d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
