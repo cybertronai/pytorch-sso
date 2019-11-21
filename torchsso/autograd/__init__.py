@@ -1,1 +1,38 @@
-from torchsso.autograd.gradient import *  # NOQA
+from typing import Callable
+from contextlib import contextmanager
+
+import torch.nn as nn
+import torchsso.autograd.gradient as gradient
+
+
+@contextmanager
+def module_hook(model: nn.Module,
+                forward_preprocess: Callable=None,
+                forward_postprocess: Callable=None,
+                backward_postprocess: Callable=None):
+
+    handles = []
+    for module in model.children():
+        params = list(module.parameters())
+        params = [p for p in params if p.requires_grad]
+        if len(params) == 0:
+            continue
+
+        if forward_preprocess is not None:
+            handles.append(module.register_forward_pre_hook(forward_preprocess))
+        if forward_postprocess is not None:
+            handles.append(module.register_forward_hook(forward_postprocess))
+        if backward_postprocess is not None:
+            handles.append(module.register_backward_hook(backward_postprocess))
+
+    yield
+    for handle in handles:
+        handle.remove()
+
+
+def save_batched_grads(model: nn.Module):
+    return module_hook(model,
+                       forward_postprocess=gradient.forward_postprocess,
+                       backward_postprocess=gradient.backward_postprocess)
+
+

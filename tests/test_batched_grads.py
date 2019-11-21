@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torchsso.autograd import save_sample_grads
+from torchsso.autograd import save_batched_grads
 
 
 class LeNet5BatchNorm(nn.Module):
@@ -67,12 +67,12 @@ class ConvNet(nn.Module):
         return loss
 
 
-def test_samplegrad(arch_cls, thr=1e-5):
+def test_batched_grads(arch_cls, thr=1e-5):
     n = 10
     model = arch_cls()
     x = arch_cls.get_random_input(n=n)
 
-    with save_sample_grads(model):
+    with save_batched_grads(model):
         output = model(x)
         loss = arch_cls.get_loss(x, output)
         loss.backward()
@@ -88,5 +88,5 @@ def test_samplegrad(arch_cls, thr=1e-5):
 
 
 if __name__ == '__main__':
-    test_samplegrad(LeNet5BatchNorm)
-    test_samplegrad(ConvNet)
+    test_batched_grads(LeNet5BatchNorm)
+    test_batched_grads(ConvNet)

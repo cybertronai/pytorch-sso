@@ -1,29 +1,9 @@
-from contextlib import contextmanager
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-@contextmanager
-def save_sample_grads(model: nn.Module):
-
-    handles = []
-    for module in model.children():
-        params = list(module.parameters())
-        params = [p for p in params if p.requires_grad]
-        if len(params) == 0:
-            continue
-
-        handles.append(module.register_forward_hook(_forward_postprocess))
-        handles.append(module.register_backward_hook(_backward_postprocess))
-
-    yield
-    for handle in handles:
-        handle.remove()
-
-
-def _forward_postprocess(module, input, output):
+def forward_postprocess(module, input, output):
     data_input = input[0].clone().detach()
 
     if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
@@ -42,7 +22,7 @@ def _forward_postprocess(module, input, output):
     setattr(module, 'data_input', data_input)
 
 
-def _backward_postprocess(module, grad_input, grad_output):
+def backward_postprocess(module, grad_input, grad_output):
     grad_output = grad_output[0].clone().detach()
     data_input = getattr(module, 'data_input', None)
     assert data_input is not None, 'backward is called before forward.'
