@@ -6,6 +6,7 @@ from torchsso.autograd import save_batched_grads
 
 
 class LeNet5BatchNorm(nn.Module):
+
     def __init__(self, num_classes=10, affine=True):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 6, 5)
@@ -17,12 +18,13 @@ class LeNet5BatchNorm(nn.Module):
         self.fc2 = nn.Linear(120, 84)
         self.bn4 = nn.BatchNorm1d(84, affine=affine)
         self.fc3 = nn.Linear(84, num_classes, bias=False)
+        self.pool_func = F.max_pool2d
 
     def forward(self, x):
         h = F.relu(self.bn1(self.conv1(x)))
-        h = F.max_pool2d(h, 2)
+        h = self.pool_func(h, 2)
         h = F.relu(self.bn2(self.conv2(h)))
-        h = F.max_pool2d(h, 2)
+        h = self.pool_func(h, 2)
         h = h.view(h.size(0), -1)
         h = F.relu(self.bn3(self.fc1(h)))
         h = F.relu(self.bn4(self.fc2(h)))
@@ -41,6 +43,28 @@ class LeNet5BatchNorm(nn.Module):
         error = targets - outputs
         loss = torch.sum(error * error) / 2 / len(inputs)
         return loss
+
+
+class LeNet5BatchNorm3D(LeNet5BatchNorm):
+
+    def __init__(self, num_classes=10, affine=True):
+        super().__init__()
+        self.conv1 = nn.Conv3d(3, 6, 5)
+        self.bn1 = nn.BatchNorm3d(6, affine=affine)
+        self.conv2 = nn.Conv3d(6, 16, 5)
+        self.bn2 = nn.BatchNorm3d(16, affine=affine)
+        self.fc1 = nn.Linear(16 * 5 * 5 * 5, 120)
+        self.bn3 = nn.BatchNorm1d(120, affine=affine)
+        self.fc2 = nn.Linear(120, 84)
+        self.bn4 = nn.BatchNorm1d(84, affine=affine)
+        self.fc3 = nn.Linear(84, num_classes, bias=False)
+        self.pool_func = F.max_pool3d
+
+    @staticmethod
+    def get_random_input(n=1):
+        c, t, h, w = 3, 32, 32, 32
+        x = torch.randn(n, c, t, h, w)
+        return x
 
 
 class ConvNet1D(nn.Module):
@@ -118,6 +142,7 @@ def test_batched_grads(arch_cls, thr=1e-5):
 
 if __name__ == '__main__':
     test_batched_grads(LeNet5BatchNorm)
+    test_batched_grads(LeNet5BatchNorm3D)
     test_batched_grads(ConvNet1D)
     test_batched_grads(ConvNet2D)
     test_batched_grads(ConvNet3D)
