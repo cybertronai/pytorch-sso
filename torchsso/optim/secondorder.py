@@ -149,7 +149,7 @@ class SecondOrderOptimizer(Optimizer):
         module_name = module.__class__.__name__
         curv_shape = self.curv_shapes.get(module_name, '')
         curv_name = curv_shape + self.curv_type + module_name
-        curv_class = getattr(torchsso, curv_name, None)
+        curv_class = getattr(torchsso.curv, curv_name, None)
 
         assert curv_class is not None, f"Failed to lookup Curvature class {curv_name} for {module}."
 

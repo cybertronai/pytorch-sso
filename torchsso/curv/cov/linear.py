@@ -1,5 +1,5 @@
 import torch
-from torchsso import Curvature, DiagCurvature, KronCurvature
+from torchsso.curv import Curvature, DiagCurvature, KronCurvature
 
 
 class CovLinear(Curvature):

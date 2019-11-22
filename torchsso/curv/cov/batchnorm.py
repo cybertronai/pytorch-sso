@@ -1,4 +1,4 @@
-from torchsso import Curvature, DiagCurvature
+from torchsso.curv import Curvature, DiagCurvature
 
 
 class CovBatchNorm1d(Curvature):

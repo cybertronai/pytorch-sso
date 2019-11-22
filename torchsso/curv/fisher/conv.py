@@ -1,4 +1,4 @@
-from torchsso import DiagCovConv2d, KronCovConv2d, Fisher
+from torchsso.curv import DiagCovConv2d, KronCovConv2d, Fisher
 import torch
 import torch.nn.functional as F
 

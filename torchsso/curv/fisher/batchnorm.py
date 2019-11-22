@@ -1,5 +1,5 @@
 import torch
-from torchsso import DiagCovBatchNorm2d, Fisher
+from torchsso.curv import DiagCovBatchNorm2d, Fisher
 
 
 class DiagFisherBatchNorm2d(DiagCovBatchNorm2d, Fisher):

@@ -1,4 +1,4 @@
-from torchsso import Curvature, DiagCurvature, KronCurvature
+from torchsso.curv import Curvature, DiagCurvature, KronCurvature
 import torch
 import torch.nn.functional as F
 

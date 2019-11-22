@@ -1,5 +1,5 @@
 import torch
-from torchsso import DiagCovLinear, KronCovLinear, Fisher
+from torchsso.curv import DiagCovLinear, KronCovLinear, Fisher
 
 
 class DiagFisherLinear(DiagCovLinear, Fisher):
