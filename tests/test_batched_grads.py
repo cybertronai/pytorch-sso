@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torchsso.autograd import save_batched_grads
 
 
-class LeNet5BatchNorm(nn.Module):
+class LeNetBatchNorm(nn.Module):
 
     def __init__(self, num_classes=10, affine=True):
         super().__init__()
@@ -45,7 +45,7 @@ class LeNet5BatchNorm(nn.Module):
         return loss
 
 
-class LeNet5BatchNorm3D(LeNet5BatchNorm):
+class LeNetBatchNorm3D(LeNetBatchNorm):
 
     def __init__(self, num_classes=10, affine=True):
         super().__init__()
@@ -141,8 +141,8 @@ def test_batched_grads(arch_cls, thr=1e-5):
 
 
 if __name__ == '__main__':
-    test_batched_grads(LeNet5BatchNorm)
-    test_batched_grads(LeNet5BatchNorm3D)
+    test_batched_grads(LeNetBatchNorm)
+    test_batched_grads(LeNetBatchNorm3D)
     test_batched_grads(ConvNet1D)
     test_batched_grads(ConvNet2D)
     test_batched_grads(ConvNet3D)
