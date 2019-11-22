@@ -43,11 +43,12 @@ class LeNet5BatchNorm(nn.Module):
         return loss
 
 
-class ConvNet(nn.Module):
+class ConvNet1D(nn.Module):
+
     def __init__(self):
         super().__init__()
-        self.downsample = nn.Conv2d(3, 5, 3, stride=2, padding=1)
-        self.upsample = nn.ConvTranspose2d(5, 3, 3, stride=2, padding=1)
+        self.downsample = nn.Conv1d(3, 5, 3, stride=2, padding=1)
+        self.upsample = nn.ConvTranspose1d(5, 3, 3, stride=2, padding=1)
 
     def forward(self, x):
         h = self.downsample(x)
@@ -56,8 +57,8 @@ class ConvNet(nn.Module):
 
     @staticmethod
     def get_random_input(n=1):
-        c, h, w = 3, 12, 12
-        x = torch.randn(n, c, h, w)
+        c, l = 3, 12
+        x = torch.randn(n, c, l)
         return x
 
     @staticmethod
@@ -65,6 +66,34 @@ class ConvNet(nn.Module):
         error = outputs - inputs
         loss = torch.sum(error * error) / 2 / len(inputs)
         return loss
+
+
+class ConvNet2D(ConvNet1D):
+
+    def __init__(self):
+        super().__init__()
+        self.downsample = nn.Conv2d(3, 5, 3, stride=2, padding=1)
+        self.upsample = nn.ConvTranspose2d(5, 3, 3, stride=2, padding=1)
+
+    @staticmethod
+    def get_random_input(n=1):
+        c, h, w = 3, 12, 12
+        x = torch.randn(n, c, h, w)
+        return x
+
+
+class ConvNet3D(ConvNet1D):
+
+    def __init__(self):
+        super().__init__()
+        self.downsample = nn.Conv3d(3, 5, 3, stride=2, padding=1)
+        self.upsample = nn.ConvTranspose3d(5, 3, 3, stride=2, padding=1)
+
+    @staticmethod
+    def get_random_input(n=1):
+        c, t, h, w = 3, 12, 12, 12
+        x = torch.randn(n, c, t, h, w)
+        return x
 
 
 def test_batched_grads(arch_cls, thr=1e-5):
@@ -89,4 +118,6 @@ def test_batched_grads(arch_cls, thr=1e-5):
 
 if __name__ == '__main__':
     test_batched_grads(LeNet5BatchNorm)
-    test_batched_grads(ConvNet)
+    test_batched_grads(ConvNet1D)
+    test_batched_grads(ConvNet2D)
+    test_batched_grads(ConvNet3D)

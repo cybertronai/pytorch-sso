@@ -1,6 +1,8 @@
+from typing import Callable
+
 import torch
 import torch.nn as nn
-from torchsso.utils import im2col_2d, im2col_3d
+from torchsso.utils import im2col_1d, im2col_2d, im2col_3d
 
 
 def forward_postprocess(module, input, output):
@@ -31,10 +33,18 @@ def backward_postprocess(module, grad_input, grad_output):
     args = [module, data_input, grad_output]
     if isinstance(module, nn.Linear):
         grad_linear(*args)
+    elif isinstance(module, nn.Conv1d):
+        grad_conv1d(*args)
     elif isinstance(module, nn.Conv2d):
         grad_conv2d(*args)
+    elif isinstance(module, nn.Conv3d):
+        grad_conv3d(*args)
+    elif isinstance(module, nn.ConvTranspose1d):
+        grad_conv_transpose1d(*args)
     elif isinstance(module, nn.ConvTranspose2d):
         grad_conv_transpose2d(*args)
+    elif isinstance(module, nn.ConvTranspose3d):
+        grad_conv_transpose3d(*args)
     elif isinstance(module, nn.BatchNorm1d):
         grad_batchnorm1d(*args)
     elif isinstance(module, nn.BatchNorm2d):
@@ -58,56 +68,99 @@ def grad_linear(module: nn.Module, data_input: torch.Tensor, grad_output: torch.
         setattr(linear.bias, 'grads', grad_output)  # n x f_out
 
 
+def _grad_conv(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor, im2col_func: Callable):
+
+    if module.weight.requires_grad:
+        # kernel_size = (k_1)(k_2)...(k_d)
+        # n x (c_in)(kernel_size) x output_size
+        input2d = im2col_func(data_input, module)
+
+        n, c_out = grad_output.size()[0:2]
+        grad_output2d = grad_output.view(n, c_out, -1)  # n x c_out x output_size
+
+        grads_2d = torch.einsum('bik,bjk->bij', grad_output2d, input2d)  # n x c_out x (c_in)(kernel_size)
+        setattr(module.weight, 'grads', grads_2d.view(n, *module.weight.size()))  # n x c_out x c_in x k_1 x ... x k_d
+
+    if module.bias is not None and module.bias.requires_grad:
+        ndim = grad_output.ndimension()
+        setattr(module.bias, 'grads', grad_output.sum(dim=tuple(range(ndim))[2:]))  # n x c_out
+
+
+def grad_conv1d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
+
+    assert isinstance(module, nn.Conv1d)
+    assert data_input.ndimension() == 3  # n x c_in x l_in
+    assert grad_output.ndimension() == 3  # n x c_out x l_out
+
+    _grad_conv(module, data_input, grad_output, im2col_1d)
+
+
 def grad_conv2d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
 
     assert isinstance(module, nn.Conv2d)
-    conv2d = module
     assert data_input.ndimension() == 4  # n x c_in x h_in x w_in
     assert grad_output.ndimension() == 4  # n x c_out x h_out x w_out
 
-    if conv2d.weight.requires_grad:
-        # n x (c_in)(k_h)(k_w) x (h_out)(w_out)
-        input2d = im2col_2d(data_input, conv2d)
+    _grad_conv(module, data_input, grad_output, im2col_2d)
 
-        # n x c_out x h_out x w_out
-        n, c_out, h, w = grad_output.size()
-        # n x c_out x (h_out)(w_out)
-        grad_output2d = grad_output.view(n, c_out, -1)
 
-        c_out, c_in, k_h, k_w = conv2d.weight.size()
+def grad_conv3d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
 
-        grads_2d = torch.einsum('bik,bjk->bij', grad_output2d, input2d)  # n x c_out x (c_in)(k_h)(k_w)
-        setattr(conv2d.weight, 'grads', grads_2d.view(n, c_out, c_in, k_h, k_w))  # n x c_out x c_in x k_h x k_w
+    assert isinstance(module, nn.Conv3d)
+    assert data_input.ndimension() == 5  # n x c_in x t_in x h_in x w_in
+    assert grad_output.ndimension() == 5  # n x c_out x t_out x h_out x w_out
 
-    if conv2d.bias is not None and conv2d.bias.requires_grad:
-        setattr(conv2d.bias, 'grads', grad_output.sum(dim=(2, 3)))  # n x c_out
+    _grad_conv(module, data_input, grad_output, im2col_3d)
+
+
+def _grad_conv_transpose(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor,
+                         im2col_func: Callable):
+
+    if module.weight.requires_grad:
+        n, c_in = data_input.size()[0:2]
+
+        # n x c_in x input_size
+        input2d = data_input.view(n, c_in, -1)
+
+        # kernel_size = (k_1)(k_2)...(k_d)
+        # n x (c_out)(kernel_size) x input_size
+        grad_output2d = im2col_func(grad_output, module)
+
+        # n x c_in x (c_out)(kernel_size)
+        grads_2d = torch.einsum('bik,bjk->bij', input2d, grad_output2d)
+        # n x c_in x c_out x k_h x k_w
+        setattr(module.weight, 'grads', grads_2d.view(n, *module.weight.size()))
+
+    if module.bias is not None and module.bias.requires_grad:
+        ndim = grad_output.ndimension()
+        setattr(module.bias, 'grads', grad_output.sum(dim=tuple(range(ndim))[2:]))  # n x c_in
+
+
+def grad_conv_transpose1d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
+
+    assert isinstance(module, nn.ConvTranspose1d)
+    assert data_input.ndimension() == 3  # n x c_in x l_in
+    assert grad_output.ndimension() == 3  # n x c_out x l_out
+
+    _grad_conv_transpose(module, data_input, grad_output, im2col_1d)
 
 
 def grad_conv_transpose2d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
 
     assert isinstance(module, nn.ConvTranspose2d)
-    conv_transpose2d = module
     assert data_input.ndimension() == 4  # n x c_in x h_in x w_in
     assert grad_output.ndimension() == 4  # n x c_out x h_out x w_out
 
-    if conv_transpose2d.weight.requires_grad:
-        n, c_in, h, w = data_input.size()
+    _grad_conv_transpose(module, data_input, grad_output, im2col_2d)
 
-        # n x c_in x (h_in)(w_in)
-        input2d = data_input.view(n, c_in, -1)
 
-        # n x (c_out)(k_h)(k_w) x (h_in)(w_in)
-        grad_output2d = im2col_2d(grad_output, conv_transpose2d)
+def grad_conv_transpose3d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
 
-        c_in, c_out, k_h, k_w = conv_transpose2d.weight.size()
+    assert isinstance(module, nn.ConvTranspose3d)
+    assert data_input.ndimension() == 5  # n x c_in x t_in x h_in x w_in
+    assert grad_output.ndimension() == 5  # n x c_out x t_out x h_out x w_out
 
-        # n x c_in x (c_out)(k_h)(k_w)
-        grads_2d = torch.einsum('bik,bjk->bij', input2d, grad_output2d)
-        # n x c_in x c_out x k_h x k_w
-        setattr(conv_transpose2d.weight, 'grads', grads_2d.view(n, c_in, c_out, k_h, k_w))
-
-    if conv_transpose2d.bias is not None and conv_transpose2d.bias.requires_grad:
-        setattr(conv_transpose2d.bias, 'grads', grad_output.sum(dim=(2, 3)))  # n x c_in
+    _grad_conv_transpose(module, data_input, grad_output, im2col_3d)
 
 
 def grad_batchnorm1d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):

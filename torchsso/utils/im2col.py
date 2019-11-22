@@ -3,6 +3,26 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def im2col_1d(x: torch.Tensor, conv1d: nn.Module):
+    assert x.ndimension() == 3  # n x c x l_in
+    assert isinstance(conv1d, (nn.Conv1d, nn.ConvTranspose1d))
+
+    kernel_size = conv1d.kernel_size
+    stride = conv1d.stride
+    assert conv1d.dilation == (1,)
+
+    # padding
+    pad_left = pad_right = conv1d.padding[0]
+    x = F.pad(x, [pad_left, pad_right])
+
+    # n x c x l_out x k
+    x_slices = x.unfold(2, kernel_size[0], stride[0])
+    # n x ck x l_out
+    Mx = x_slices.transpose(2, 3).flatten(start_dim=1, end_dim=2)
+
+    return Mx
+
+
 def im2col_2d(x: torch.Tensor, conv2d: nn.Module):
     assert x.ndimension() == 4  # n x c x h_in x w_in
     assert isinstance(conv2d, (nn.Conv2d, nn.ConvTranspose2d))
