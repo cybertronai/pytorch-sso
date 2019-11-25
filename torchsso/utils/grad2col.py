@@ -6,7 +6,7 @@ import numpy as np
 from typing import Tuple
 
 
-def grad2col(gy: torch.Tensor, module: nn.Module, input_size: Tuple[int]):
+def grad2col(gy: torch.Tensor, module: nn.Module, input_size: Tuple[int]=None):
     if isinstance(module, (nn.Conv1d, nn.ConvTranspose1d)):
         return grad2col_1d(gy, module, input_size)
     elif isinstance(module, (nn.Conv2d, nn.ConvTranspose2d)):
@@ -17,18 +17,33 @@ def grad2col(gy: torch.Tensor, module: nn.Module, input_size: Tuple[int]):
         raise ValueError(f'Unsupported module: {module}.')
 
 
-def grad2col_1d(gy: torch.Tensor, conv1d: nn.Module, input_size: Tuple[int]):
-    assert len(input_size) == 1  # l_in
+def _get_input_size(output_size, stride, padding, dilation, kernel_size):
+
+    ndim = len(output_size)
+    o = output_size
+    s = stride
+    p = padding
+    d = dilation
+    k = kernel_size
+
+    return tuple((o[i] - 1) * s[i] - 2 * p[i] + d[i] * (k[i] - 1) + 1 for i in range(ndim))
+
+
+def grad2col_1d(gy: torch.Tensor, conv1d: nn.Module, input_size: Tuple[int]=None):
     assert gy.ndimension() == 3  # n x c_out x l_out
     assert isinstance(conv1d, (nn.Conv1d, nn.ConvTranspose1d))
     assert conv1d.dilation == (1,), 'dilation > 1 is not supported.'
 
-    l_in, = input_size
     n, c_out, l_out = gy.size()
     stride = conv1d.stride
     dilation = conv1d.dilation
     pad = conv1d.padding
     kernel = conv1d.kernel_size
+
+    if input_size is None:
+        l_in, = _get_input_size(gy.size()[2:], stride, pad, dilation, kernel)
+    else:
+        l_in, = input_size
 
     w = gy.new_zeros(stride)
     w[0] = 1
@@ -61,18 +76,21 @@ def grad2col_1d(gy: torch.Tensor, conv1d: nn.Module, input_size: Tuple[int]):
     return Mgy
 
 
-def grad2col_2d(gy: torch.Tensor, conv2d: nn.Module, input_size: Tuple[int]):
-    assert len(input_size) == 2  # h_in x w_in
+def grad2col_2d(gy: torch.Tensor, conv2d: nn.Module, input_size: Tuple[int]=None):
     assert gy.ndimension() == 4  # n x c_out x h_out x w_out
     assert isinstance(conv2d, (nn.Conv2d, nn.ConvTranspose2d))
     assert conv2d.dilation == (1, 1), 'dilation > 1 is not supported.'
 
-    h_in, w_in = input_size
     n, c_out, h_out, w_out = gy.size()
     stride = conv2d.stride
     dilation = conv2d.dilation
     pad = conv2d.padding
     kernel = conv2d.kernel_size
+
+    if input_size is None:
+        h_in, w_in = _get_input_size(gy.size()[2:], stride, pad, dilation, kernel)
+    else:
+        h_in, w_in = input_size
 
     w = gy.new_zeros(stride)
     w[0, 0] = 1
@@ -114,18 +132,21 @@ def grad2col_2d(gy: torch.Tensor, conv2d: nn.Module, input_size: Tuple[int]):
     return Mgy
 
 
-def grad2col_3d(gy: torch.Tensor, conv3d: nn.Module, input_size: Tuple[int]):
-    assert len(input_size) == 3  # t_in x h_in x w_in
+def grad2col_3d(gy: torch.Tensor, conv3d: nn.Module, input_size: Tuple[int]=None):
     assert gy.ndimension() == 5  # n x c_out x t_out x h_out x w_out
     assert isinstance(conv3d, (nn.Conv3d, nn.ConvTranspose3d))
     assert conv3d.dilation == (1, 1, 1), 'dilation > 1 is not supported.'
 
-    t_in, h_in, w_in = input_size
     n, c_out, t_out, h_out, w_out = gy.size()
     stride = conv3d.stride
     dilation = conv3d.dilation
     pad = conv3d.padding
     kernel = conv3d.kernel_size
+
+    if input_size is None:
+        t_in, h_in, w_in = _get_input_size(gy.size()[2:], stride, pad, dilation, kernel)
+    else:
+        t_in, h_in, w_in = input_size
 
     w = gy.new_zeros(stride)
     w[0, 0, 0] = 1
