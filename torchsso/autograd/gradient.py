@@ -2,7 +2,7 @@ from typing import Callable
 
 import torch
 import torch.nn as nn
-from torchsso.utils import im2col_1d, im2col_2d, im2col_3d
+from torchsso.utils import *
 
 
 def forward_postprocess(module, input, output):
@@ -135,7 +135,7 @@ def _grad_conv_transpose(module: nn.Module, data_input: torch.Tensor, grad_outpu
 
     if module.bias is not None and module.bias.requires_grad:
         ndim = grad_output.ndimension()
-        setattr(module.bias, 'grads', grad_output.sum(dim=tuple(range(ndim))[2:]))  # n x c_in
+        setattr(module.bias, 'grads', grad_output.sum(dim=tuple(range(ndim))[2:]))  # n x c_out
 
 
 def grad_conv_transpose1d(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
