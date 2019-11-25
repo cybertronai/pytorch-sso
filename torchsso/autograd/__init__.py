@@ -12,7 +12,9 @@ def module_hook(model: nn.Module,
                 backward_postprocess: Callable=None):
 
     handles = []
-    for module in model.children():
+    for module in model.modules():
+        if len(list(module.children())) > 0:
+            continue
         params = list(module.parameters())
         params = [p for p in params if p.requires_grad]
         if len(params) == 0:
