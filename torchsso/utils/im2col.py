@@ -3,13 +3,24 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def im2col(x: torch.Tensor, module: nn.Module):
+    if isinstance(module, (nn.Conv1d, nn.ConvTranspose1d)):
+        return im2col_1d(x, module)
+    elif isinstance(module, (nn.Conv2d, nn.ConvTranspose2d)):
+        return im2col_2d(x, module)
+    elif isinstance(module, (nn.Conv3d, nn.ConvTranspose3d)):
+        return im2col_3d(x, module)
+    else:
+        raise ValueError(f'Unsupported module: {module}.')
+
+
 def im2col_1d(x: torch.Tensor, conv1d: nn.Module):
     assert x.ndimension() == 3  # n x c x l_in
     assert isinstance(conv1d, (nn.Conv1d, nn.ConvTranspose1d))
 
     kernel_size = conv1d.kernel_size
     stride = conv1d.stride
-    assert conv1d.dilation == (1,)
+    assert conv1d.dilation == (1,), 'dilation > 1 is not supported.'
 
     # padding
     pad_left = pad_right = conv1d.padding[0]
@@ -36,13 +47,13 @@ def im2col_2d(x: torch.Tensor, conv2d: nn.Module):
     return Mx
 
 
-def im2col_3d(x: torch.Tensor, conv3d: nn.Conv3d):
+def im2col_3d(x: torch.Tensor, conv3d: nn.Module):
     assert x.ndimension() == 5  # n x c x t_in x h_in x w_in
     assert isinstance(conv3d, (nn.Conv3d, nn.ConvTranspose3d))
 
     kernel_size = conv3d.kernel_size
     stride = conv3d.stride
-    assert conv3d.dilation == (1, 1, 1)
+    assert conv3d.dilation == (1, 1, 1), 'dilation > 1 is not supported.'
 
     # padding
     pad_left = pad_right = conv3d.padding[0]
