@@ -116,7 +116,9 @@ class SecondOrderOptimizer(Optimizer):
             if len(params) == 0:
                 continue
 
-            curv_class = self.get_curv_class(module)
+            module_name = module.__class__.__name__
+            curv_shape = self.curv_shapes.get(module_name, '')
+            curv_class = torchsso.curv.get_curv_class(module, curv_type, curv_shape)
             curvature = curv_class(module, **curv_kwargs)
 
             group = {
@@ -144,16 +146,6 @@ class SecondOrderOptimizer(Optimizer):
     @property
     def local_param_groups(self):
         return self.param_groups
-
-    def get_curv_class(self, module):
-        module_name = module.__class__.__name__
-        curv_shape = self.curv_shapes.get(module_name, '')
-        curv_name = curv_shape + self.curv_type + module_name
-        curv_class = getattr(torchsso.curv, curv_name, None)
-
-        assert curv_class is not None, f"Failed to lookup Curvature class {curv_name} for {module}."
-
-        return curv_class
 
     def step(self, closure=None):
         """Performs a single optimization step.
