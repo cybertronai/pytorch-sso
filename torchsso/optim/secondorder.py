@@ -112,8 +112,11 @@ class SecondOrderOptimizer(Optimizer):
         for module in model.modules():
             if len(list(module.children())) > 0:
                 continue
+
+            # ignore modules without learnable parameters
             params = list(module.parameters())
-            if len(params) == 0:
+            params_require_grad = [p.requires_grad for p in params]
+            if sum(params_require_grad) == 0:
                 continue
 
             module_name = module.__class__.__name__
