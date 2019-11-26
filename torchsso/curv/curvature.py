@@ -123,7 +123,7 @@ class Curvature(object):
     def forward_postprocess(self, module, input, output):
         assert self._module == module
 
-        data_input = input[0].detach()
+        data_input = input[0]
 
         if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
             bnorm = module
@@ -141,19 +141,20 @@ class Curvature(object):
         setattr(module, 'data_input', data_input)
         setattr(module, 'data_output', output)
 
-        self.update_in_forward(data_input)
+        self.update_in_forward(data_input.detach())
 
     def backward_postprocess(self, module, grad_input, grad_output):
         assert self._module == module
 
-        index = 1 if self.bias else 0
-        grad_input = None if grad_input[index] is None else grad_input[index].detach()
         grad_output = grad_output[0]
 
-        setattr(module, 'grad_input', grad_input)
+        data_input = getattr(module, 'data_input', None)
+        assert data_input is not None, 'backward is called before forward.'
+        assert data_input.size(0) == grad_output.size(0)
+
         setattr(module, 'grad_output', grad_output)
 
-        self.update_in_backward(grad_output)
+        self.update_in_backward(data_input.detach(), grad_output.detach())
 
         # adjust grad scale along with 'reduction' in loss function
         batch_size = grad_output.shape[0]
@@ -162,10 +163,10 @@ class Curvature(object):
     def adjust_data_scale(self, scale):
         self._data = [d.mul(scale) for d in self._data]
 
-    def update_in_forward(self, data_input):
+    def update_in_forward(self, data_input: torch.Tensor):
         pass
 
-    def update_in_backward(self, grad_output):
+    def update_in_backward(self, data_input: torch.Tensor, grad_output: torch.Tensor):
         raise NotImplementedError
 
     def step(self, update_std=False, update_inv=True):
@@ -225,7 +226,7 @@ class DiagCurvature(Curvature):
     def element_wise_init(self, value):
         self._data = [torch.ones(s, device=self.device).mul(value) for s in self.shape]
 
-    def update_in_backward(self, grad_output_data):
+    def update_in_backward(self, data_input: torch.Tensor, grad_output: torch.Tensor):
         raise NotImplementedError
 
     def _inv(self, X):
@@ -295,10 +296,10 @@ class KronCurvature(Curvature):
     def G(self):
         return self._G
 
-    def update_in_forward(self, input_data):
+    def update_in_forward(self, data_input: torch.Tensor):
         raise NotImplementedError
 
-    def update_in_backward(self, grad_output_data):
+    def update_in_backward(self, data_input: torch.Tensor, grad_output: torch.Tensor):
         raise NotImplementedError
 
     def adjust_data_scale(self, scale):
