@@ -1,7 +1,7 @@
 from torchsso.curv.curvature import Curvature, DiagCurvature, KronCurvature  # NOQA
 from torchsso.curv.cov.linear import CovLinear, DiagCovLinear, KronCovLinear  # NOQA
-from torchsso.curv.cov.conv import CovConv2d, DiagCovConv2d, KronCovConv2d  # NOQA
-from torchsso.curv.cov.batchnorm import CovBatchNorm1d, DiagCovBatchNorm1d, CovBatchNorm2d, DiagCovBatchNorm2d  # NOQA
+from torchsso.curv.cov.conv import DiagCovConvNd, DiagCovConvTransposeNd, KronCovConvNd, KronCovConvTransposeNd  # NOQA
+from torchsso.curv.cov.batchnorm import DiagCovBatchNormNd  # NOQA
 
 from torchsso.curv.fisher import get_closure_for_fisher  # NOQA
 from torchsso.curv.fisher import Fisher  # NOQA

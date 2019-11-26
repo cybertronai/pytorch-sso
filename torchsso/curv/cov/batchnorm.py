@@ -1,49 +1,27 @@
-from torchsso.curv import Curvature, DiagCurvature
+from torchsso.curv import DiagCurvature
+import torch
 
 
-class CovBatchNorm1d(Curvature):
+class DiagCovBatchNormNd(DiagCurvature):
 
-    def update_in_backward(self, grad_output_data):
-        pass
+    def update_in_backward(self, data_input: torch.Tensor, grad_output: torch.Tensor):
 
+        ndim = grad_output.ndimension()
+        if ndim > 2:
+            grad_grad = grad_output.mul(grad_output).sum(dim=tuple(range(ndim))[2:])  # n x c
+        else:
+            grad_grad = grad_output.mul(grad_output)  # n x f
 
-class DiagCovBatchNorm1d(DiagCurvature):
+        if self.weight_requires_grad:
+            if ndim > 2:
+                in_in = data_input.mul(data_input).sum(dim=tuple(range(ndim))[2:])  # n x c
+            else:
+                in_in = data_input.mul(data_input)  # n x f
 
-    def update_in_backward(self, grad_output):
-        data_input = getattr(self._module, 'data_input', None)  # n x f
-        assert data_input is not None
+            data_w = in_in.mul(grad_grad).mean(dim=0)  # c x 1
 
-        in_in = data_input.mul(data_input)  # n x f
-        grad_grad = grad_output.mul(grad_output)  # n x f
+            self._data = [data_w]
 
-        data_w = in_in.mul(grad_grad).mean(dim=0)  # f x 1
-
-        self._data = [data_w]
-
-        if self.bias:
-            data_b = grad_grad.mean(dim=0)  # f x 1
-            self._data.append(data_b)
-
-
-class CovBatchNorm2d(Curvature):
-
-    def update_in_backward(self, grad_output):
-        pass
-
-
-class DiagCovBatchNorm2d(DiagCurvature):
-
-    def update_in_backward(self, grad_out):
-        data_input = getattr(self._module, 'data_input', None)  # n x c x h x w
-        assert data_input is not None
-
-        in_in = data_input.mul(data_input).sum(dim=(2, 3))  # n x c
-        grad_grad = grad_out.mul(grad_out).sum(dim=(2, 3))  # n x c
-
-        data_w = in_in.mul(grad_grad).mean(dim=0)  # c x 1
-
-        self._data = [data_w]
-
-        if self.bias:
+        if self.bias_requires_grad:
             data_b = grad_grad.mean(dim=0)  # c x 1
             self._data.append(data_b)
