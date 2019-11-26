@@ -8,9 +8,7 @@ class CovLinear(Curvature):
         data_input = getattr(self._module, 'data_input', None)  # n x f_in
         assert data_input is not None
 
-        n = data_input.shape[0]
-
-        if self.bias:
+        if self.bias_requires_grad:
             ones = torch.ones((n, 1), device=data_input.device, dtype=data_input.dtype)
             data_input = torch.cat((data_input, ones), 1)  # n x (f_in+1)
 
@@ -40,7 +38,7 @@ class DiagCovLinear(DiagCurvature):
                               in_in).div(n)  # f_out x f_in
         self._data = [data_w]
 
-        if self.bias:
+        if self.bias_requires_grad:
             data_b = grad_grad.mean(dim=0)  # f_out x 1
             self._data.append(data_b)
 
@@ -49,7 +47,7 @@ class KronCovLinear(KronCurvature):
 
     def update_in_forward(self, input_data):
         n = input_data.shape[0]  # n x f_in
-        if self.bias:
+        if self.bias_requires_grad:
             ones = input_data.new_ones((n, 1))
             # shape: n x (f_in+1)
             input_data = torch.cat((input_data, ones), 1)
@@ -69,8 +67,7 @@ class KronCovLinear(KronCurvature):
     def precondition_grad(self, params):
         A_inv, G_inv = self.inv
 
-        # todo check params == list?
-        if self.bias:
+        if self.bias_requires_grad:
             grad = torch.cat(
                 (params[0].grad, params[1].grad.view(-1, 1)), 1)
             preconditioned_grad = G_inv.mm(grad).mm(A_inv)
@@ -86,7 +83,7 @@ class KronCovLinear(KronCurvature):
     def sample_params(self, params, mean, std_scale):
         A_ic, G_ic = self.std
 
-        if self.bias:
+        if self.bias_requires_grad:
             m = torch.cat(
                 (mean[0], mean[1].view(-1, 1)), 1)
             param = m.add(std_scale, G_ic.mm(
@@ -106,7 +103,7 @@ class KronCovLinear(KronCurvature):
 
         G_shape = (f_out, f_out)
 
-        if self.bias:
+        if self.bias_requires_grad:
             A_shape = (f_in + 1, f_in + 1)
         else:
             A_shape = (f_in, f_in)
