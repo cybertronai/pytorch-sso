@@ -95,9 +95,14 @@ class Curvature(object):
         return self._module
 
     @property
-    def bias(self):
+    def weight_requires_grad(self):
+        weight = getattr(self._module, 'weight', None)
+        return weight is not None and weight.requires_grad
+
+    @property
+    def bias_requires_grad(self):
         bias = getattr(self._module, 'bias', None)
-        return False if bias is None else True
+        return bias is not None and bias.requires_grad
 
     @property
     def damping(self):
