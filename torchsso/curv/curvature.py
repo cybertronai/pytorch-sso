@@ -52,8 +52,8 @@ class Curvature(object):
 
         self.pi_type = pi_type
 
-        module.register_forward_hook(self.forward_postprocess)
-        module.register_backward_hook(self.backward_postprocess)
+        self.forward_hook_handle = module.register_forward_hook(self.forward_postprocess)
+        self.backward_hook_handle = module.register_backward_hook(self.backward_postprocess)
 
     @property
     def data(self):
