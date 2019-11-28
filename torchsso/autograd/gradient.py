@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 from torchsso.utils import *
 
+from opt_einsum import contract
+
 
 def forward_postprocess(module, input, output):
     data_input = input[0].clone().detach()
@@ -63,7 +65,7 @@ def grad_linear(module: nn.Module, data_input: torch.Tensor, grad_output: torch.
     assert grad_output.ndimension() == 2  # n x f_out
 
     if linear.weight.requires_grad:
-        grads = torch.einsum('bi,bj->bij', grad_output, data_input)  # n x f_out x f_in
+        grads = contract('bi,bj->bij', grad_output, data_input)  # n x f_out x f_in
         setattr(linear.weight, 'grads', grads)  # n x f_out x f_in
 
     if linear.bias is not None and linear.bias.requires_grad:
@@ -80,7 +82,7 @@ def _grad_conv(module: nn.Module, data_input: torch.Tensor, grad_output: torch.T
         n, c_out = grad_output.size()[0:2]
         grad_output2d = grad_output.view(n, c_out, -1)  # n x c_out x output_size
 
-        grads_2d = torch.einsum('bik,bjk->bij', grad_output2d, input2d)  # n x c_out x (c_in)(kernel_size)
+        grads_2d = contract('bik,bjk->bij', grad_output2d, input2d)  # n x c_out x (c_in)(kernel_size)
         setattr(module.weight, 'grads', grads_2d.view(n, *module.weight.size()))  # n x c_out x c_in x k_1 x ... x k_d
 
     if module.bias is not None and module.bias.requires_grad:
@@ -129,7 +131,7 @@ def _grad_conv_transpose(module: nn.Module, data_input: torch.Tensor, grad_outpu
         grad_output2d = im2col_func(grad_output, module)
 
         # n x c_in x (c_out)(kernel_size)
-        grads_2d = torch.einsum('bik,bjk->bij', input2d, grad_output2d)
+        grads_2d = contract('bik,bjk->bij', input2d, grad_output2d)
         # n x c_in x c_out x k_h x k_w
         setattr(module.weight, 'grads', grads_2d.view(n, *module.weight.size()))
 
