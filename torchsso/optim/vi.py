@@ -197,15 +197,9 @@ class VIOptimizer(SecondOrderOptimizer):
             self.sample_params()
 
             # forward and backward
-            loss, output = closure()
-
+            loss = closure()
+            prob = self.get_model_prediction()
             acc_loss.update(loss, scale=1/m)
-            if output.ndim == 2:
-                prob = F.softmax(output, dim=1)
-            elif output.ndim == 1:
-                prob = torch.sigmoid(output)
-            else:
-                raise ValueError(f'Invalid ndim {output.ndim}')
             acc_prob.update(prob, scale=1/n)
 
             # accumulate

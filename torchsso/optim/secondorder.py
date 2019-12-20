@@ -5,6 +5,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.optim import Optimizer
 import torchsso
 from torchsso.utils import TensorAccumulator
@@ -22,7 +23,7 @@ class SecondOrderOptimizer(Optimizer):
 
     Args:
         model (torch.nn.Module): model with parameters to be trained
-        curv_type (str): type of the curvature ('Hessian', 'Fisher', or 'Cov')
+        curv_type (str): type of the curvature ('Fisher' or 'Cov')
         curv_shapes (dict): shape the curvatures for each type of layer
         curv_kwargs (dict): arguments (with keys) to be passed to torchsso.Curvature.__init__()
         lr (float, optional): learning rate
@@ -49,17 +50,18 @@ class SecondOrderOptimizer(Optimizer):
             (if False, this optimizer works as SGD)
 
     Example:
+        >>> curv_type = "Cov"
         >>> curv_shapes = {"Conv2d": "Kron", "Linear": "Diag"}
         >>> curv_kwargs = {"damping": 1e-3, "ema_decay": 0.999}
-        >>> optimizer = torchsso.optim.SecondOrderOptimizer(model, "Cov", curv_shapes, curv_kwargs)
-        >>>
+        >>> optimizer = torchsso.optim.SecondOrderOptimizer(model, curv_type, curv_shapes, curv_kwargs)
+
         >>> def closure():
         >>>    optimizer.zero_grad()
         >>>    output = model(data)
-        >>>    loss = F.cross_entropy(output, target)
-        >>>    loss.backward(create_graph=args.create_graph)
-        >>>    return loss, output
-        >>>
+        >>>    loss = torch.nn.functional.cross_entropy(output, target)
+        >>>    loss.backward()
+        >>>    return loss
+
         >>> optimizer.step(closure=closure)
     """
 
@@ -91,6 +93,7 @@ class SecondOrderOptimizer(Optimizer):
         if normalizing_weights and weight_scale is not None and weight_scale <= 0:
             raise ValueError("Invalid weight scale for LARS: {}".format(weight_scale))
 
+        model.register_forward_hook(self.forward_postprocess)
         self.model = model
         defaults = {'lr': lr, 'momentum': momentum, 'momentum_type': momentum_type,
                     'grad_ema_decay': grad_ema_decay, 'grad_ema_type': grad_ema_type,
@@ -139,6 +142,10 @@ class SecondOrderOptimizer(Optimizer):
                 group['l2_reg'] = 0
                 group['weight_decay'] = 0
                 group['normalizing_weights'] = False
+
+    @staticmethod
+    def forward_postprocess(module, input, output):
+        setattr(module, 'output', output)
 
     def init_buffer(self, params):
         for p in params:
@@ -204,6 +211,26 @@ class SecondOrderOptimizer(Optimizer):
             self.update_postprocess(group)
 
         return loss
+
+    @property
+    def model_output(self):
+        output = getattr(self.model, 'output', None)
+        assert output is not None, 'The model has to be reevaluated in advance.'
+
+        return output
+
+    def get_model_prediction(self):
+        logits = self.model_output
+
+        if logits.ndim == 2:
+            prob = F.softmax(logits, dim=1)
+        elif logits.ndim == 1:
+            prob = torch.sigmoid(logits)
+        else:
+            raise ValueError(f'Invalid ndim of the model output: {logit.ndim}.'
+                             f'The model output is expected to be 1D or 2D tensor.')
+
+        return prob
 
     def backward_postprocess(self, target='params'):
         for group in self.param_groups:
