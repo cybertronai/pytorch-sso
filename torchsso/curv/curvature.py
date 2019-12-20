@@ -217,6 +217,10 @@ class Curvature(object):
     def std_norm(self):
         raise NotImplementedError
 
+    def get_eigenvalues(self):
+        e, _ = torch.symeig(self.data)
+        return e
+
 
 class DiagCurvature(Curvature):
 
@@ -256,6 +260,11 @@ class DiagCurvature(Curvature):
             return 0
 
         return sum(std.norm().item() for std in self.std)
+
+    def get_eigenvalues(self):
+        e = torch.cat(self.data, 0)
+        sorted_e, _ = torch.sort(e)
+        return sorted_e
 
 
 class KronCurvature(Curvature):
@@ -335,6 +344,13 @@ class KronCurvature(Curvature):
 
         A_ic, G_ic = self.std
         return A_ic.norm().item() * G_ic.norm().item()
+
+    def get_eigenvalues(self):
+        eA, _ = torch.symeig(self._A)
+        eG, _ = torch.symeig(self._G)
+        e = torch.einsum('a,b->ab', [eA, eG]).flatten()
+        sorted_e, _ = torch.sort(e)
+        return sorted_e
 
 
 def add_value_to_diagonal(X, value):
