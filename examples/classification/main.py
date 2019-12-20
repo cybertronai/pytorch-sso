@@ -55,6 +55,8 @@ def main():
                         help='name of the learning rate scheduler')
     parser.add_argument('--scheduler_args', type=json.loads, default=None,
                         help='[JSON] arguments for the scheduler')
+    parser.add_argument('--metainit', action='store_true', default=False,
+                        help='if True, apply MetaInit')
     # Options
     parser.add_argument('--download', action='store_true', default=False,
                         help='if True, downloads the dataset (CIFAR-10 or 100) from the internet')
@@ -68,6 +70,24 @@ def main():
                         help='number of sub processes for data loading')
     parser.add_argument('--log_interval', type=int, default=50,
                         help='how many batches to wait before logging training status')
+    parser.add_argument('--save_param_log', action='store_true', default=False,
+                        help='if True, save parameters status log')
+    parser.add_argument('--param_log_interval', type=int, default=50,
+                        help='how many batches to wait before logging parameters status')
+    parser.add_argument('--save_grad_stats_log', action='store_true', default=False,
+                        help='if True, save grads stats log')
+    parser.add_argument('--grad_stats_log_interval', type=int, default=50,
+                        help='how many iterations to wait before logging grad stats')
+    parser.add_argument('--save_grad_noise_log', action='store_true', default=False,
+                        help='if True, save grads noise log')
+    parser.add_argument('--grad_noise_log_interval', type=int, default=50,
+                        help='how many iterations to wait before logging grad noise')
+    parser.add_argument('--grad_noise_num_samples', type=int, default=10,
+                        help='number of samples for estimating minibatch gradient noise')
+    parser.add_argument('--save_curv_eigvals', action='store_true', default=False,
+                        help='if True, save curvature eigenvalues')
+    parser.add_argument('--curv_eigvals_interval', type=int, default=50,
+                        help='how many batches to wait before logging curvature eigenvalues')
     parser.add_argument('--log_file_name', type=str, default='log',
                         help='log file name')
     parser.add_argument('--checkpoint_interval', type=int, default=50,
@@ -220,6 +240,10 @@ def main():
     logger = Logger(args.out, args.log_file_name)
     logger.start()
 
+    if args.metainit:
+        x, _ = next(iter(train_loader))
+        torchsso.utils.metainit(model, F.cross_entropy, x.size(), num_classes, steps=200)
+
     # Run training
     for epoch in range(start_epoch, args.epochs + 1):
 
@@ -266,7 +290,16 @@ def train(model, device, train_loader, optimizer, scheduler, epoch, args, logger
     num_iters_in_epoch = len(train_loader)
     base_num_iter = (epoch - 1) * num_iters_in_epoch
 
+    iteration = base_num_iter + 1
     for batch_idx, (data, target) in enumerate(train_loader):
+
+        if args.save_grad_stats_log and (iteration % args.grad_stats_log_interval == 0 or iteration == 1):
+            observe_percase_grad_stats(model, optimizer, device, train_loader, epoch, iteration, args)
+
+        if args.save_grad_noise_log and (iteration % args.grad_noise_log_interval == 0 or iteration == 1):
+            calculate_batch_grad(model, optimizer, device, train_loader)
+            observe_minibatch_grad_noise(model, optimizer, device, train_loader, epoch, iteration, args)
+
         data, target = data.to(device), target.to(device)
 
         for name, param in model.named_parameters():
@@ -293,6 +326,8 @@ def train(model, device, train_loader, optimizer, scheduler, epoch, args, logger
         loss = loss.item()
         total_correct += correct
 
+        total_data_size += len(data)
+
         prob = F.softmax(output, dim=1)
         for p, idx in zip(prob, target):
             confidence['top1'] += torch.max(p).item()
@@ -304,26 +339,27 @@ def train(model, device, train_loader, optimizer, scheduler, epoch, args, logger
             confidence['true'] += p[idx].item()
             confidence['false'] += (1 - p[idx].item())
 
-        iteration = base_num_iter + batch_idx + 1
-        total_data_size += len(data)
-
-        if scheduler_type(scheduler) == 'iter':
-            scheduler.step()
-
-        if batch_idx % args.log_interval == 0:
+        if iteration == 1 or iteration % args.log_interval == 0:
             accuracy = 100. * total_correct / total_data_size
             elapsed_time = logger.elapsed_time
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}, '
                   'Accuracy: {:.0f}/{} ({:.2f}%), '
                   'Elapsed Time: {:.1f}s'.format(
                 epoch, total_data_size, epoch_size, 100. * (batch_idx + 1) / num_iters_in_epoch,
-                loss, total_correct, total_data_size, accuracy, elapsed_time))
+                loss, total_correct, total_data_size, accuracy, elapsed_time), flush=True)
 
             # save log
             lr = optimizer.param_groups[0]['lr']
             log = {'epoch': epoch, 'iteration': iteration, 'elapsed_time': elapsed_time,
                    'accuracy': accuracy, 'loss': loss, 'lr': lr}
 
+            logger.write(log)
+
+        if args.save_param_log and \
+                (iteration == 1 or iteration % args.param_log_interval == 0):
+            log = {'epoch': epoch, 'iteration': iteration}
+
+            # save param norm log
             for name, param in model.named_parameters():
                 attr = 'p_pre_{}'.format(name)
                 p_pre = getattr(model, attr)
@@ -338,7 +374,36 @@ def train(model, device, train_loader, optimizer, scheduler, epoch, args, logger
                          'g_norm': g_norm, 'upd_norm': upd_norm, 'noise_scale': noise_scale}
                 log[name] = p_log
 
-            logger.write(log)
+            logdir = os.path.join(args.out, 'param_stats')
+            if not os.path.isdir(logdir):
+                os.makedirs(logdir)
+            logpath = os.path.join(logdir, f'iter{iteration}.log')
+            with open(logpath, 'w') as f:
+                json.dump(log, f, indent=4)
+
+        if args.save_curv_eigvals and \
+                (iteration == 1 or iteration % args.curv_eigvals_interval == 0):
+            assert isinstance(optimizer, torchsso.optim.SecondOrderOptimizer)
+
+            log = {'epoch': epoch, 'iteration': iteration, 'batch_size': args.batch_size, 'eigvals': {}}
+
+            for group in optimizer.local_param_groups:
+                name = group['name']
+                curv = group['curv']
+                eigvals = curv.get_eigenvalues()
+                log['eigvals'][name] = eigvals.tolist()
+
+            logdir = os.path.join(args.out, 'eigvals')
+            if not os.path.isdir(logdir):
+                os.makedirs(logdir)
+            logpath = os.path.join(logdir, f'iter{iteration}.log')
+            with open(logpath, 'w') as f:
+                json.dump(log, f, indent=4)
+
+        iteration += 1
+
+        if scheduler_type(scheduler) == 'iter':
+            scheduler.step()
 
     if scheduler_type(scheduler) == 'epoch':
         scheduler.step(epoch - 1)
@@ -376,9 +441,181 @@ def validate(model, device, val_loader, optimizer):
     val_accuracy = 100. * correct / len(val_loader.dataset)
 
     print('\nEval: Average loss: {:.4f}, Accuracy: {:.0f}/{} ({:.2f}%)\n'.format(
-        val_loss, correct, len(val_loader.dataset), val_accuracy))
+        val_loss, correct, len(val_loader.dataset), val_accuracy), )
 
     return val_accuracy, val_loss
+
+
+def calculate_batch_grad(model, optimizer, device, train_loader):
+
+    model.train()
+    num_iters_in_epoch = len(train_loader)
+
+    # initialize data for each param
+    grads = {}
+    for name, param in model.named_parameters():
+        grads[name] = torchsso.utils.TensorAccumulator()
+
+    print('calculating batch gradient...')
+    for batch_idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+        logit = model(data)
+        loss = F.cross_entropy(logit, target)
+        loss.backward()
+
+        # accumulate grads
+        for name, param in model.named_parameters():
+            grads[name].update(param.grad, scale=1/num_iters_in_epoch)
+
+    # set batch grad to each param
+    for name, param in model.named_parameters():
+        setattr(param, 'batch_grad', grads[name].get())
+
+
+def observe_minibatch_grad_noise(model, optimizer, device, loader, epoch, iteration, args):
+
+    model.train()
+
+    batch_size = args.batch_size
+    num_samples = args.grad_noise_num_samples
+
+    log = {'epoch': epoch, 'iteration': iteration,
+           'batch_size': batch_size, 'num_samples': num_samples}
+
+    batch_g_sqnorm = 0
+    for name, param in model.named_parameters():
+        assert hasattr(param, 'batch_grad'), 'batch gradient needs to be calculated in advance.'
+        batch_g = param.batch_grad
+        batch_g_sqnorm += torch.pow(batch_g, 2).sum()
+
+    batch_g_norm = batch_g_sqnorm.sqrt()
+    avg_err = torchsso.utils.TensorAccumulator()
+
+    log['errors'] = []
+    log['g_norms'] = []
+    print('estimating minibatch gradient noise...')
+    for i in range(num_samples):
+
+        iterator = iter(loader)
+        data, target = next(iterator)
+        data, target = data.to(device), target.to(device)
+
+        optimizer.zero_grad()
+        logit = model(data)
+        loss = F.cross_entropy(logit, target)
+        loss.backward()
+
+        g_sqnorm = 0
+        err_sqnorm = 0
+        for name, param in model.named_parameters():
+            g_sqnorm += torch.pow(param.grad, 2).sum()
+            e = param.grad - param.batch_grad
+            err_sqnorm += torch.pow(e, 2).sum()
+
+        err = err_sqnorm.sqrt().div(batch_g_norm)
+        log['errors'].append(err.item())
+        avg_err.update(err, scale=1/num_samples)
+        log['g_norms'].append(g_sqnorm.sqrt().item())
+
+    log['error'] = avg_err.get().item()
+
+    logdir = os.path.join(args.out, 'grad_noise')
+    if not os.path.isdir(logdir):
+        os.makedirs(logdir)
+    logpath = os.path.join(logdir, f'bs{batch_size}_iter{iteration}.log')
+    with open(logpath, 'w') as f:
+        json.dump(log, f, indent=4)
+
+
+def observe_percase_grad_stats(model, optimizer, device, train_loader, epoch, iteration, args):
+
+    model.train()
+
+    num_iters_in_epoch = len(train_loader)
+
+    log = {'epoch': epoch, 'iteration': iteration,
+           'entropy': [], 'cross_entropy': [], 'grads': {}}
+
+    # initialize data for each param
+    grads = {'total': {'g_norms': []},
+             'logit': {'g_norms': []}}
+    for name, param in model.named_parameters():
+        grads[name] = {'avg_g': torchsso.utils.TensorAccumulator(),
+                       'square_avg_g': torchsso.utils.TensorAccumulator(),
+                       'avg_square_g': torchsso.utils.TensorAccumulator(),
+                       'g_norms': []
+                       }
+
+    print('collecting gradient stats ...')
+    for batch_idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
+
+        with torchsso.autograd.save_batched_grads(model):
+            optimizer.zero_grad()
+            logit = model(data)
+            loss = F.cross_entropy(logit, target)
+            loss.backward()
+
+        batch_size = data.size(0)
+        prob = F.softmax(logit)
+        log_prob = F.log_softmax(logit)
+        entropy = (-prob * log_prob).sum(axis=1)
+        cross_entropy = torch.zeros(batch_size)
+        logit_grads = prob
+        for i in range(batch_size):
+            cross_entropy[i] = -log_prob[i][target[i]]
+            logit_grads[i][target[i]] -= 1.
+
+        log['entropy'].extend(entropy.tolist())
+        log['cross_entropy'].extend(cross_entropy.tolist())
+
+        batched_logit_g_norm = (logit_grads * logit_grads).sum(axis=1).sqrt()
+        grads['logit']['g_norms'].extend(batched_logit_g_norm.tolist())
+
+        # accumulate grads
+        batched_g_sqnorm_total = torch.zeros(batch_size).to(device)
+        for name, param in model.named_parameters():
+            grads[name]['avg_g'].update(param.grad, scale=1/num_iters_in_epoch)
+            batched_g = param.grads
+            batched_square_g = batched_g * batched_g
+            avg_square_g = batched_square_g.mean(axis=0)
+            batched_g_sqnorm = batched_square_g.flatten(start_dim=1).sum(axis=1)
+            batched_g_sqnorm_total += batched_g_sqnorm
+            batched_g_norm = batched_g_sqnorm.sqrt()
+
+            grads[name]['avg_square_g'].update(avg_square_g, scale=1/num_iters_in_epoch)
+            grads[name]['g_norms'].extend(batched_g_norm.tolist())
+
+        batched_g_norm_total = batched_g_sqnorm_total.sqrt()
+        grads['total']['g_norms'].extend(batched_g_norm_total.tolist())
+
+    # save log
+    log['grads']['total'] = grads['total']
+    log['grads']['logit'] = grads['logit']
+
+    for name, param in model.named_parameters():
+        avg_g = grads[name]['avg_g'].get()
+        square_avg_g = avg_g * avg_g
+        avg_square_g = grads[name]['avg_square_g'].get()
+        avg_square_g_norm = avg_square_g.norm().item()
+
+        _log = {'g_shape': list(avg_g.size()),
+                'avg_g_norm': avg_g.norm().item(),
+                'square_avg_g_norm': square_avg_g.norm().item(),
+                'avg_square_g_norm': avg_square_g_norm,
+                'square_avg_error': (square_avg_g - avg_square_g).norm().item() / avg_square_g_norm,
+                'g_norms': grads[name]['g_norms']
+                }
+
+        log['grads'][name] = _log
+
+    logdir = os.path.join(args.out, 'grad_stats')
+    if not os.path.isdir(logdir):
+        os.makedirs(logdir)
+    logpath = os.path.join(logdir, f'epoch{epoch}.log')
+    with open(logpath, 'w') as f:
+        json.dump(log, f, indent=4)
 
 
 if __name__ == '__main__':
