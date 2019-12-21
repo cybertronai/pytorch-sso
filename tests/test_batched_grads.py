@@ -120,6 +120,32 @@ class ConvNet3D(ConvNet1D):
         return x
 
 
+class EmbedID(nn.Module):
+
+    num_embeddings = 5
+    embedding_dim = 3
+
+    def __init__(self):
+        super().__init__()
+        self.embedding = nn.Embedding(self.num_embeddings, self.embedding_dim)
+
+    def forward(self, x):
+        h = self.embedding(x)
+        return h
+
+    @staticmethod
+    def get_random_input(n=1):
+        x = torch.randint(5, (n,))
+        return x
+
+    @staticmethod
+    def get_loss(inputs, outputs):
+        targets = torch.randn(outputs.size())
+        error = targets - outputs
+        loss = torch.sum(error * error) / 2 / len(inputs)
+        return loss
+
+
 def test_batched_grads(arch_cls, thr=1e-5):
     n = 10
     model = arch_cls()
@@ -146,3 +172,4 @@ if __name__ == '__main__':
     test_batched_grads(ConvNet1D)
     test_batched_grads(ConvNet2D)
     test_batched_grads(ConvNet3D)
+    test_batched_grads(EmbedID)

@@ -53,6 +53,8 @@ def backward_postprocess(module, grad_input, grad_output):
         grad_batchnorm2d(*args)
     elif isinstance(module, nn.BatchNorm3d):
         grad_batchnorm3d(*args)
+    elif isinstance(module, nn.Embedding):
+        grad_embedding(*args)
     else:
         raise ValueError(f'Unsupported module class: {module.__class__}.')
 
@@ -210,4 +212,19 @@ def grad_batchnorm3d(module: nn.Module, data_input: torch.Tensor, grad_output: t
 
     if batchnorm3d.bias.requires_grad:
         setattr(batchnorm3d.bias, 'grads', grad_output.sum(dim=(2, 3, 4)))  # n x c
+
+
+def grad_embedding(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
+    assert isinstance(module, nn.Embedding)
+    embedding = module
+    assert data_input.ndimension() == 1  # n
+    assert grad_output.ndimension() == 2  # n x embedding_dim
+
+    if embedding.weight.requires_grad:
+        grads = torch.zeros(data_input.size(0),
+                            embedding.num_embeddings,
+                            embedding.embedding_dim)
+        for i, idx in enumerate(data_input):
+            grads[i][idx] = grad_output[i]
+        setattr(embedding.weight, 'grads', grads)
 
