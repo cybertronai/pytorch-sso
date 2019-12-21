@@ -2,7 +2,7 @@ from typing import Callable
 from contextlib import contextmanager
 
 import torch.nn as nn
-import torchsso.autograd.gradient as gradient
+from torchsso.autograd import gradient
 
 
 @contextmanager
