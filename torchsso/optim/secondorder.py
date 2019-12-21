@@ -112,7 +112,7 @@ class SecondOrderOptimizer(Optimizer):
         self.update_inv = update_inv
         self.precondition_grad = precondition_grad
 
-        for module in model.modules():
+        for name, module in model.named_modules():
             if len(list(module.children())) > 0:
                 continue
 
@@ -128,6 +128,7 @@ class SecondOrderOptimizer(Optimizer):
             curvature = curv_class(module, **curv_kwargs)
 
             group = {
+                'name': name,
                 'params': params,
                 'curv': curvature,
                 'acc_curv': TensorAccumulator(),
