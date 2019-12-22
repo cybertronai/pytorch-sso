@@ -230,10 +230,10 @@ def grad_layernorm(module: nn.Module, data_input: torch.Tensor, grad_output: tor
 
     if layernorm.weight.requires_grad:
         grads = data_input.mul(grad_output)
-        setattr(layernorm.weight, 'grads', grads.view(-1, *layernorm.weight.size()))
+        setattr(layernorm.weight, 'grads', grads)
 
     if layernorm.bias.requires_grad:
-        setattr(layernorm.bias, 'grads', grad_output.view(-1, *layernorm.bias.size()))
+        setattr(layernorm.bias, 'grads', grad_output)
 
 
 def grad_embedding(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
@@ -249,6 +249,10 @@ def grad_embedding(module: nn.Module, data_input: torch.Tensor, grad_output: tor
         grad_output = grad_output.flatten(0, -2)
         for i, idx in enumerate(data_input.flatten()):
             grads[i][idx] = grad_output[i]
+
+        grads = grads.view(*data_input.size(),
+                           embedding.num_embeddings,
+                           embedding.embedding_dim)
 
         setattr(embedding.weight, 'grads', grads)
 

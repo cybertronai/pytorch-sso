@@ -35,7 +35,9 @@ class LeNetBatchNorm(nn.Module):
     def get_random_input(n=1):
         c, h, w = 3, 32, 32
         x = torch.randn(n, c, h, w)
-        return x
+        if n == 1:
+            x = torch.cat((x, x), 0)
+        return x.double()
 
     @staticmethod
     def get_loss(inputs, outputs):
@@ -64,7 +66,9 @@ class LeNetBatchNorm3D(LeNetBatchNorm):
     def get_random_input(n=1):
         c, t, h, w = 3, 32, 32, 32
         x = torch.randn(n, c, t, h, w)
-        return x
+        if n == 1:
+            x = torch.cat((x, x), 0)
+        return x.double()
 
 
 class ConvNet1D(nn.Module):
@@ -83,7 +87,7 @@ class ConvNet1D(nn.Module):
     def get_random_input(n=1):
         c, l = 3, 12
         x = torch.randn(n, c, l)
-        return x
+        return x.double()
 
     @staticmethod
     def get_loss(inputs, outputs):
@@ -103,7 +107,7 @@ class ConvNet2D(ConvNet1D):
     def get_random_input(n=1):
         c, h, w = 3, 12, 12
         x = torch.randn(n, c, h, w)
-        return x
+        return x.double()
 
 
 class ConvNet3D(ConvNet1D):
@@ -117,33 +121,7 @@ class ConvNet3D(ConvNet1D):
     def get_random_input(n=1):
         c, t, h, w = 3, 12, 12, 12
         x = torch.randn(n, c, t, h, w)
-        return x
-
-
-class EmbedID(nn.Module):
-
-    num_embeddings = 5
-    embedding_dim = 3
-
-    def __init__(self):
-        super().__init__()
-        self.embedding = nn.Embedding(self.num_embeddings, self.embedding_dim)
-
-    def forward(self, x):
-        h = self.embedding(x)
-        return h
-
-    @staticmethod
-    def get_random_input(n=1):
-        x = torch.randint(5, (n,))
-        return x
-
-    @staticmethod
-    def get_loss(inputs, outputs):
-        targets = torch.randn(outputs.size())
-        error = targets - outputs
-        loss = torch.sum(error * error) / 2 / len(inputs)
-        return loss
+        return x.double()
 
 
 class BertEmbeddings(nn.Module):
@@ -184,10 +162,12 @@ class BertEmbeddings(nn.Module):
         return loss
 
 
-def test_batched_grads(arch_cls, thr=1e-5):
-    n = 10
+def test_batched_grads(arch_cls, thr=1e-7):
+    n = 2
     model = arch_cls()
     x = arch_cls.get_random_input(n=n)
+
+    model = model.double()
 
     with save_batched_grads(model):
         output = model(x)
@@ -197,11 +177,10 @@ def test_batched_grads(arch_cls, thr=1e-5):
     for module in model.children():
         for p in module.parameters():
             if p.requires_grad:
-                error = p.grads.sum(0) - p.grad
-                ratio = error.norm() / (p.grad.norm() + 1.0)
-                assert ratio < thr, f'Error is too large for {module}' \
-                                    f' param_size={p.size()}' \
-                                    f' error_ratio={ratio}.'
+                error = p.grads.view(-1, *p.grad.size()).sum(0) - p.grad
+                assert error.norm() < thr, f'Error is too large for {module}' \
+                                             f' param_size={p.size()}' \
+                                             f' error_norm={error.norm()}.'
 
 
 if __name__ == '__main__':
@@ -210,5 +189,4 @@ if __name__ == '__main__':
     test_batched_grads(ConvNet1D)
     test_batched_grads(ConvNet2D)
     test_batched_grads(ConvNet3D)
-    test_batched_grads(EmbedID)
     test_batched_grads(BertEmbeddings)
