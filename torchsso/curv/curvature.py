@@ -312,7 +312,12 @@ class KronCurvature(Curvature):
             pi = 1.
 
         r = self.damping**0.5
-        self.inv = [torchsso.utils.inv(add_value_to_diagonal(X, value))
+
+        def _inv(X):
+            u = torch.cholesky(X)
+            return torch.cholesky_inverse(u)
+
+        self.inv = [_inv(add_value_to_diagonal(X, value))
                     for X, value in zip([A, G], [r*pi, r/pi])]
 
     def precondition_grad(self, params):
@@ -321,7 +326,7 @@ class KronCurvature(Curvature):
     def update_std(self):
         A_inv, G_inv = self.inv
 
-        self.std = [torchsso.utils.cholesky(X)
+        self.std = [torch.cholesky(X)
                     for X in [A_inv, G_inv]]
 
     def sample_params(self, params, mean, std_scale):
