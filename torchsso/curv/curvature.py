@@ -53,7 +53,6 @@ class Curvature(object):
         self.pi_type = pi_type
 
         self.forward_hook_handle = module.register_forward_hook(self.forward_postprocess)
-        self.backward_hook_handle = module.register_backward_hook(self.backward_postprocess)
 
     @property
     def data(self):
@@ -123,7 +122,7 @@ class Curvature(object):
     def forward_postprocess(self, module, input, output):
         assert self._module == module
 
-        data_input = input[0]
+        data_input = input[0].clone().detach()
 
         if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
             bnorm = module
@@ -138,27 +137,17 @@ class Curvature(object):
             data_input_norm = (output - bnorm.bias.view(shape)).div(bnorm.weight.view(shape))
             data_input = data_input_norm
 
-        setattr(module, 'data_input', data_input)
-        setattr(module, 'data_output', output)
+        self.update_in_forward(data_input)
 
-        self.update_in_forward(data_input.detach())
+        def backward_hook(grad_output):
+            grad_output = grad_output.clone().detach()
+            self.update_in_backward(data_input, grad_output)
 
-    def backward_postprocess(self, module, grad_input, grad_output):
-        assert self._module == module
+            # adjust grad scale along with 'reduction' in loss function
+            batch_size = grad_output.shape[0]
+            self.adjust_data_scale(batch_size**2)
 
-        grad_output = grad_output[0]
-
-        data_input = getattr(module, 'data_input', None)
-        assert data_input is not None, 'backward is called before forward.'
-        assert data_input.size(0) == grad_output.size(0)
-
-        setattr(module, 'grad_output', grad_output)
-
-        self.update_in_backward(data_input.detach(), grad_output.detach())
-
-        # adjust grad scale along with 'reduction' in loss function
-        batch_size = grad_output.shape[0]
-        self.adjust_data_scale(batch_size**2)
+        output.register_hook(backward_hook)
 
     def adjust_data_scale(self, scale):
         self._data = [d.mul(scale) for d in self._data]
