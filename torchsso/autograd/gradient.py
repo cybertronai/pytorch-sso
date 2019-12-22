@@ -48,6 +48,8 @@ def forward_postprocess(module, input, output):
             grad_batchnorm2d(*args)
         elif isinstance(module, nn.BatchNorm3d):
             grad_batchnorm3d(*args)
+        elif isinstance(module, nn.LayerNorm):
+            grad_layernorm(*args)
         elif isinstance(module, nn.Embedding):
             grad_embedding(*args)
         else:
@@ -214,14 +216,16 @@ def grad_batchnorm3d(module: nn.Module, data_input: torch.Tensor, grad_output: t
 def grad_embedding(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
     assert isinstance(module, nn.Embedding)
     embedding = module
-    assert data_input.ndimension() == 1  # n
-    assert grad_output.ndimension() == 2  # n x embedding_dim
+    assert data_input.ndimension() + 1 == grad_output.ndimension()
 
     if embedding.weight.requires_grad:
-        grads = torch.zeros(data_input.size(0),
+        grads = torch.zeros(data_input.nelement(),
                             embedding.num_embeddings,
                             embedding.embedding_dim)
-        for i, idx in enumerate(data_input):
+
+        grad_output = grad_output.flatten(0, -2)
+        for i, idx in enumerate(data_input.flatten()):
             grads[i][idx] = grad_output[i]
+
         setattr(embedding.weight, 'grads', grads)
 
