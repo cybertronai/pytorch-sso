@@ -183,6 +183,11 @@ def main():
     setattr(model, 'num_classes', num_classes)
     model = model.to(device)
 
+    def forward_postprocess(module, input, output):
+        setattr(module, 'output', output)
+
+    model.register_forward_hook(forward_postprocess)
+
     optim_kwargs = {} if args.optim_args is None else args.optim_args
 
     # Setup optimizer
@@ -318,8 +323,9 @@ def train(model, device, train_loader, optimizer, scheduler, epoch, args, logger
         if isinstance(optimizer, SecondOrderOptimizer) and optimizer.curv_type == 'Fisher':
             closure = torchsso.get_closure_for_fisher(optimizer, model, data, target, **args.fisher_args)
 
-        loss, output = optimizer.step(closure=closure)
+        loss = optimizer.step(closure=closure)
 
+        output = model.output
         pred = output.argmax(dim=1, keepdim=True)
         correct = pred.eq(target.view_as(pred)).sum().item()
 

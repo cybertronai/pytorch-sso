@@ -187,7 +187,6 @@ class VIOptimizer(SecondOrderOptimizer):
         n = self.defaults['acc_steps']
 
         acc_loss = TensorAccumulator()
-        acc_prob = TensorAccumulator()
 
         self.set_random_seed()
 
@@ -198,9 +197,7 @@ class VIOptimizer(SecondOrderOptimizer):
 
             # forward and backward
             loss = closure()
-            prob = self.get_model_prediction()
             acc_loss.update(loss, scale=1/m)
-            acc_prob.update(prob, scale=1/n)
 
             # accumulate
             for group in self.param_groups:
@@ -213,12 +210,12 @@ class VIOptimizer(SecondOrderOptimizer):
                 if curv is not None:
                     group['acc_curv'].update(curv.data, scale=1/m/n)
 
-        loss, prob = acc_loss.get(), acc_prob.get()
+        loss = acc_loss.get()
 
         # update acc step
         self.optim_state['acc_step'] += 1
         if self.optim_state['acc_step'] < n:
-            return loss, prob
+            return loss
         else:
             self.optim_state['acc_step'] = 0
 
@@ -249,7 +246,7 @@ class VIOptimizer(SecondOrderOptimizer):
 
         self.adjust_kl_weighting()
 
-        return loss, prob
+        return loss
 
     def prediction(self, data, mc=None, keep_probs=False):
 
