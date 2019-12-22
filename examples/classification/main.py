@@ -313,7 +313,7 @@ def train(model, device, train_loader, optimizer, scheduler, epoch, args, logger
             loss = F.cross_entropy(output, target)
             loss.backward(create_graph=args.create_graph)
 
-            return loss, output
+            return loss
 
         if isinstance(optimizer, SecondOrderOptimizer) and optimizer.curv_type == 'Fisher':
             closure = torchsso.get_closure_for_fisher(optimizer, model, data, target, **args.fisher_args)

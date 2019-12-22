@@ -452,7 +452,7 @@ def train(rank, epoch, model, device, train_loader, optimizer, scheduler,
             loss = F.cross_entropy(output, target)
             loss.backward()
 
-            return loss, output
+            return loss
 
         if isinstance(optimizer, DistributedSecondOrderOptimizer) \
                 and optimizer.curv_type == 'Fisher':
