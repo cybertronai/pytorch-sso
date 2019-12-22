@@ -179,8 +179,8 @@ def test_batched_grads(arch_cls, thr=1e-7):
             if p.requires_grad:
                 error = p.grads.view(-1, *p.grad.size()).sum(0) - p.grad
                 assert error.norm() < thr, f'Error is too large for {module}' \
-                                             f' param_size={p.size()}' \
-                                             f' error_norm={error.norm()}.'
+                                           f' param_size={p.size()}' \
+                                           f' error_norm={error.norm()}.'
 
 
 if __name__ == '__main__':

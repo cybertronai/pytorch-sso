@@ -244,7 +244,8 @@ def grad_embedding(module: nn.Module, data_input: torch.Tensor, grad_output: tor
     if embedding.weight.requires_grad:
         grads = torch.zeros(data_input.nelement(),
                             embedding.num_embeddings,
-                            embedding.embedding_dim)
+                            embedding.embedding_dim,
+                            dtype=grad_output.dtype)
 
         grad_output = grad_output.flatten(0, -2)
         for i, idx in enumerate(data_input.flatten()):
