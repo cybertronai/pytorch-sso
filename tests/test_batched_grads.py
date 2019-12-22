@@ -146,6 +146,44 @@ class EmbedID(nn.Module):
         return loss
 
 
+class BertEmbeddings(nn.Module):
+
+    def __init__(self, vocab_size=30522, max_position_embeddings=512, type_vocab_size=2, hidden_size=10):
+        super(BertEmbeddings, self).__init__()
+        self.word_embeddings = nn.Embedding(vocab_size, hidden_size)
+        self.position_embeddings = nn.Embedding(max_position_embeddings, hidden_size)
+        self.token_type_embeddings = nn.Embedding(type_vocab_size, hidden_size)
+        self.layer_norm = nn.LayerNorm(hidden_size, eps=1e-12)
+
+    def forward(self, input_ids, token_type_ids=None):
+        seq_length = input_ids.size(1)
+        position_ids = torch.arange(seq_length, dtype=torch.long, device=input_ids.device)
+        position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
+        if token_type_ids is None:
+            token_type_ids = torch.zeros_like(input_ids)
+
+        words_embeddings = self.word_embeddings(input_ids)
+        position_embeddings = self.position_embeddings(position_ids)
+        token_type_embeddings = self.token_type_embeddings(token_type_ids)
+
+        embeddings = words_embeddings + position_embeddings + token_type_embeddings
+        embeddings = self.layer_norm(embeddings)
+        return embeddings
+
+    @staticmethod
+    def get_random_input(n=1):
+        seq_length = 128
+        x = torch.randint(100, (n, seq_length))
+        return x
+
+    @staticmethod
+    def get_loss(inputs, outputs):
+        targets = torch.randn(outputs.size())
+        error = targets - outputs
+        loss = torch.sum(error * error) / 2 / len(inputs)
+        return loss
+
+
 def test_batched_grads(arch_cls, thr=1e-5):
     n = 10
     model = arch_cls()
@@ -173,3 +211,4 @@ if __name__ == '__main__':
     test_batched_grads(ConvNet2D)
     test_batched_grads(ConvNet3D)
     test_batched_grads(EmbedID)
+    test_batched_grads(BertEmbeddings)

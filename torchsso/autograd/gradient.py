@@ -12,6 +12,8 @@ def forward_postprocess(module, input, output):
 
     if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
         bnorm = module
+        if not bnorm.affine:
+            return
         f = bnorm.num_features
         if isinstance(module, nn.BatchNorm1d):
             shape = (1, f)
@@ -21,6 +23,14 @@ def forward_postprocess(module, input, output):
             shape = (1, f, 1, 1, 1)
         # restore normalized input
         data_input_norm = (output - bnorm.bias.view(shape)).div(bnorm.weight.view(shape))
+        data_input = data_input_norm
+
+    if isinstance(module, nn.LayerNorm):
+        layernorm = module
+        if not layernorm.elementwise_affine:
+            return
+        # restore normalized input
+        data_input_norm = (output - layernorm.bias).div(layernorm.weight)
         data_input = data_input_norm
 
     def backward_hook(grad_output):
@@ -211,6 +221,19 @@ def grad_batchnorm3d(module: nn.Module, data_input: torch.Tensor, grad_output: t
 
     if batchnorm3d.bias.requires_grad:
         setattr(batchnorm3d.bias, 'grads', grad_output.sum(dim=(2, 3, 4)))  # n x c
+
+
+def grad_layernorm(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
+    assert isinstance(module, nn.LayerNorm)
+    layernorm = module
+    assert layernorm.elementwise_affine
+
+    if layernorm.weight.requires_grad:
+        grads = data_input.mul(grad_output)
+        setattr(layernorm.weight, 'grads', grads.view(-1, *layernorm.weight.size()))
+
+    if layernorm.bias.requires_grad:
+        setattr(layernorm.bias, 'grads', grad_output.view(-1, *layernorm.bias.size()))
 
 
 def grad_embedding(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
