@@ -23,40 +23,37 @@ def forward_postprocess(module, input, output):
         data_input_norm = (output - bnorm.bias.view(shape)).div(bnorm.weight.view(shape))
         data_input = data_input_norm
 
-    setattr(module, 'data_input', data_input)
+    def backward_hook(grad_output):
+        grad_output = grad_output.clone().detach()
+        assert data_input.size(0) == grad_output.size(0)
 
+        args = [module, data_input, grad_output]
+        if isinstance(module, nn.Linear):
+            grad_linear(*args)
+        elif isinstance(module, nn.Conv1d):
+            grad_conv1d(*args)
+        elif isinstance(module, nn.Conv2d):
+            grad_conv2d(*args)
+        elif isinstance(module, nn.Conv3d):
+            grad_conv3d(*args)
+        elif isinstance(module, nn.ConvTranspose1d):
+            grad_conv_transpose1d(*args)
+        elif isinstance(module, nn.ConvTranspose2d):
+            grad_conv_transpose2d(*args)
+        elif isinstance(module, nn.ConvTranspose3d):
+            grad_conv_transpose3d(*args)
+        elif isinstance(module, nn.BatchNorm1d):
+            grad_batchnorm1d(*args)
+        elif isinstance(module, nn.BatchNorm2d):
+            grad_batchnorm2d(*args)
+        elif isinstance(module, nn.BatchNorm3d):
+            grad_batchnorm3d(*args)
+        elif isinstance(module, nn.Embedding):
+            grad_embedding(*args)
+        else:
+            raise ValueError(f'Unsupported module class: {module.__class__}.')
 
-def backward_postprocess(module, grad_input, grad_output):
-    grad_output = grad_output[0].clone().detach()
-    data_input = getattr(module, 'data_input', None)
-    assert data_input is not None, 'backward is called before forward.'
-    assert data_input.size(0) == grad_output.size(0)
-
-    args = [module, data_input, grad_output]
-    if isinstance(module, nn.Linear):
-        grad_linear(*args)
-    elif isinstance(module, nn.Conv1d):
-        grad_conv1d(*args)
-    elif isinstance(module, nn.Conv2d):
-        grad_conv2d(*args)
-    elif isinstance(module, nn.Conv3d):
-        grad_conv3d(*args)
-    elif isinstance(module, nn.ConvTranspose1d):
-        grad_conv_transpose1d(*args)
-    elif isinstance(module, nn.ConvTranspose2d):
-        grad_conv_transpose2d(*args)
-    elif isinstance(module, nn.ConvTranspose3d):
-        grad_conv_transpose3d(*args)
-    elif isinstance(module, nn.BatchNorm1d):
-        grad_batchnorm1d(*args)
-    elif isinstance(module, nn.BatchNorm2d):
-        grad_batchnorm2d(*args)
-    elif isinstance(module, nn.BatchNorm3d):
-        grad_batchnorm3d(*args)
-    elif isinstance(module, nn.Embedding):
-        grad_embedding(*args)
-    else:
-        raise ValueError(f'Unsupported module class: {module.__class__}.')
+    output.register_hook(backward_hook)
 
 
 def grad_linear(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
