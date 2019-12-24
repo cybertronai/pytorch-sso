@@ -147,7 +147,8 @@ class Curvature(object):
             batch_size = grad_output.shape[0]
             self.adjust_data_scale(batch_size**2)
 
-        output.register_hook(backward_hook)
+        if output.requires_grad:
+            output.register_hook(backward_hook)
 
     def adjust_data_scale(self, scale):
         self._data = [d.mul(scale) for d in self._data]

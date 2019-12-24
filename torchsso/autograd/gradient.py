@@ -65,7 +65,8 @@ def forward_postprocess(module, input, output):
         else:
             raise ValueError(f'Unsupported module class: {module.__class__}.')
 
-    output.register_hook(backward_hook)
+    if output.requires_grad:
+        output.register_hook(backward_hook)
 
 
 def grad_linear(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
