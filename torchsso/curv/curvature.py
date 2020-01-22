@@ -253,7 +253,7 @@ class DiagCurvature(Curvature):
         return sum(std.norm().item() for std in self.std)
 
     def get_eigenvalues(self):
-        e = torch.cat(self.data, 0)
+        e = torch.cat([d.flatten() for d in self.data], 0)
         sorted_e, _ = torch.sort(e)
         return sorted_e
 
