@@ -45,6 +45,7 @@ class SecondOrderOptimizer(Optimizer):
         lars (bool, optional): whether LARS (https://arxiv.org/abs/1708.03888) is applied
         lars_type (str, optional): type of gradients of which LARS
             is applied ('raw' or 'preconditioned')
+        update_ema (bool, optional): whether to update curvature EMA at each step
         update_inv (bool, optional): whether to update curvature inverses at each step
         precondition_grad (bool, optional): whether to apply preconditioning
             (if False, this optimizer works as SGD)
@@ -70,7 +71,8 @@ class SecondOrderOptimizer(Optimizer):
                  grad_ema_decay=1., grad_ema_type='raw', l2_reg=0., weight_decay=0.,
                  normalizing_weights=False, weight_scale=None,
                  acc_steps=1, non_reg_for_bn=False, bias_correction=False,
-                 lars=False, lars_type='preconditioned', update_inv=True, precondition_grad=True):
+                 lars=False, lars_type='preconditioned',
+                 update_ema=True, update_inv=True, precondition_grad=True):
 
         if lr < 0:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -109,6 +111,7 @@ class SecondOrderOptimizer(Optimizer):
         self.param_groups = []
         self.curv_type = curv_type
         self.curv_shapes = {} if curv_shapes is None else curv_shapes
+        self.update_ema = update_ema
         self.update_inv = update_inv
         self.precondition_grad = precondition_grad
 
@@ -202,7 +205,7 @@ class SecondOrderOptimizer(Optimizer):
             # update curvature
             params, curv = group['params'], group['curv']
             if curv is not None:
-                curv.step(update_inv=self.update_inv)
+                curv.step(update_ema=self.update_ema, update_inv=self.update_inv)
                 if self.precondition_grad:
                     curv.precondition_grad(params)
 
