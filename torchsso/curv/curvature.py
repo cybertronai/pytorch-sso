@@ -159,9 +159,10 @@ class Curvature(object):
     def update_in_backward(self, data_input: torch.Tensor, grad_output: torch.Tensor):
         raise NotImplementedError
 
-    def step(self, update_std=False, update_inv=True):
+    def step(self, update_ema=True, update_inv=True, update_std=False):
         # TODO(oosawak): Add check for ema/inv timing
-        self.update_ema()
+        if update_ema:
+            self.update_ema()
         if update_inv:
             self.update_inv()
         if update_std:
