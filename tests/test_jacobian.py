@@ -28,7 +28,7 @@ class ConvNet(nn.Module):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 128, 3, bias=False)
         self.conv2 = nn.Conv2d(128, 256, 3, bias=False)
-        self.fc3 = nn.Linear(12390400, n_outputs, bias=False)
+        self.fc3 = nn.Linear(200704, n_outputs, bias=False)
 
     def forward(self, x):
         s1 = self.conv1(x)
@@ -192,10 +192,10 @@ def test_jacobian():
 
 
 def test_jacobian_conv():
-    bs = 1
+    bs = 128
     n_outputs = 100
     model = ConvNet(n_outputs)
-    x = torch.randn(bs, 3, 224, 224)
+    x = torch.randn(bs, 3, 32, 32)
     loop = 1
 
     print(f'bs: {bs}')
