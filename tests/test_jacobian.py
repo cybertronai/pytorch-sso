@@ -47,9 +47,9 @@ class ConvNet(nn.Module):
 class FlaxNet(flax.nn.Module):
 
     def apply(self, x):
-        s1 = flax.nn.Dense(x, features=100)
+        s1 = flax.nn.Dense(x, features=100, bias=False)
         a1 = flax.nn.relu(s1)
-        s2 = flax.nn.Dense(a1, features=100)
+        s2 = flax.nn.Dense(a1, features=1000, bias=False)
 
         return s2
 
@@ -188,7 +188,7 @@ def reverse_mode_jacobian_with_repeat_conv(x, model, n_outputs=10):
 def test_jacobian():
     bs = 1
     n_inputs = 1000
-    n_outputs = 100
+    n_outputs = 1000
     loop = 100
     print(f'bs: {bs}')
     print(f'n_inputs: {n_inputs}')
