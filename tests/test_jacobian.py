@@ -4,6 +4,9 @@ import torch.nn.functional as F
 
 from opt_einsum import contract
 
+import flax
+import jax
+
 import time
 
 
@@ -41,6 +44,16 @@ class ConvNet(nn.Module):
         return s3
 
 
+class FlaxNet(flax.nn.Module):
+
+    def apply(self, x):
+        s1 = flax.nn.Dense(x, features=100)
+        a1 = flax.nn.relu(s1)
+        s2 = flax.nn.Dense(a1, features=100)
+
+        return s2
+
+
 def register_hooks(model: nn.Module):
 
     def forward_postprocess(module, input, output):
@@ -51,6 +64,16 @@ def register_hooks(model: nn.Module):
 
     for module in model.children():
         module.register_forward_hook(forward_postprocess)
+
+
+def jax_jacobian(x, model, mode='fwd'):
+    output = model(x)
+    if mode == 'fwd':
+        Jx = jax.jacfwd(model)(x)
+    else:
+        Jx = jax.jacrev(model)(x)
+
+    return Jx
 
 
 def manual_jacobian(x, model):
@@ -163,18 +186,34 @@ def reverse_mode_jacobian_with_repeat_conv(x, model, n_outputs=10):
 
 
 def test_jacobian():
-    bs = 128
+    bs = 1
     n_inputs = 1000
-    n_outputs = 1000
-    loop = 1
-    x = torch.randn(bs, n_inputs)
-    model = Net(n_inputs, n_outputs)
-
+    n_outputs = 100
+    loop = 100
     print(f'bs: {bs}')
     print(f'n_inputs: {n_inputs}')
     print(f'n_outputs: {n_outputs}')
     print(f'loop: {loop}')
     print('-------------')
+
+    rng = jax.random.PRNGKey(0)
+    x = jax.random.normal(rng, (bs, n_inputs))
+    _, model = FlaxNet.create(rng, x)
+
+    start = time.time()
+    for i in range(loop):
+        jax_jacobian(x, model, 'fwd')
+    elapsed = time.time() - start
+    print(f'jax.jacfwd: {elapsed:.3f}s')
+
+    start = time.time()
+    for i in range(loop):
+        jax_jacobian(x, model, 'rev')
+    elapsed = time.time() - start
+    print(f'jax.jacrev: {elapsed:.3f}s')
+
+    x = torch.randn(bs, n_inputs)
+    model = Net(n_inputs, n_outputs)
 
     start = time.time()
     for i in range(loop):

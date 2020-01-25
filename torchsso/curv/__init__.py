@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torchsso
 from torchsso.utils import TensorAccumulator
@@ -76,7 +77,7 @@ class Observer(object):
     def step(self):
         acc_steps = self.acc_steps
 
-        # accumulate
+        # accumulatejG
         for layer in self.layers:
             curv = layer.curv
             if curv is not None:
@@ -102,3 +103,14 @@ class Observer(object):
     def accumulate_postprocess(self):
         for layer in self.layers:
             layer.curv.data = layer.acc_curv.get()
+
+    def get_eigenvalues(self):
+        eigenvalues = []
+        for layer in self.layers:
+            eigenvalues.append(layer.curv.get_eigenvalues())
+
+        eigenvalues = torch.cat(eigenvalues)
+        sorted_e, _ = torch.sort(eigenvalues)
+
+        return sorted_e
+
