@@ -1,8 +1,8 @@
 {
     "dataset": "CIFAR-10",
     "epochs": 100,
-    "batch_size": 128,
-    "val_batch_size": 128,
+    "batch_size": 50000,
+    "val_batch_size": 5000,
     "random_crop": false,
     "random_horizontal_flip": false,
     "normalizing_data": true,
@@ -10,8 +10,8 @@
     "arch_name": "LeNet5",
     "optim_name": "Adam",
     "optim_args": {
-        "lr": 1e-3,
+        "lr": 1,
         "betas": [0.9, 0.999],
-        "weight_decay": 0.01
+        "weight_decay": 1e-3
     }
 }

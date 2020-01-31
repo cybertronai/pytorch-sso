@@ -139,7 +139,7 @@ def main(mode):
     n_inputs = 1000
     hidden_ndim = 1000
     n_outputs = 1000
-    n_layers = 10
+    n_layers = 3
     loop = 100
     print('-------------')
     print(f'mode: {mode}')
@@ -195,5 +195,9 @@ def main(mode):
 
 
 if __name__ == '__main__':
+    modes = ['torch.auto', 'torch.man', 'jax']
+    message = f'You need to specify the computational model from {modes}.'
+    assert len(sys.argv) > 1, message
     mode = sys.argv[1]
+    assert mode in modes, message
     main(mode)

@@ -10,7 +10,7 @@
   "arch_name": "LeNet5",
   "optim_name": "VIOptimizer",
   "optim_args": {
-    "curv_type": "Fisher",
+    "curv_type": "Cov",
     "curv_shapes": {
       "Conv2d": "Kron",
       "Linear": "Kron"
