@@ -107,7 +107,7 @@ def main():
     val_transforms.append(transforms.ToTensor())
 
     if args.normalizing_data:
-        normalize = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+        normalize = transforms.Normalize((0.1307,), (0.3081,))
         train_transforms.append(normalize)
         val_transforms.append(normalize)
 
