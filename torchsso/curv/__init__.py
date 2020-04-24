@@ -6,7 +6,6 @@ from torchsso.curv.curvature import Curvature, DiagCurvature, KronCurvature  # N
 from torchsso.curv.cov.linear import CovLinear, DiagCovLinear, KronCovLinear  # NOQA
 from torchsso.curv.cov.conv import DiagCovConvNd, DiagCovConvTransposeNd, KronCovConvNd, KronCovConvTransposeNd  # NOQA
 from torchsso.curv.cov.batchnorm import DiagCovBatchNormNd  # NOQA
-from torchsso.curv.cov.sparse import KronCovEmbedding  # NOQA
 
 
 def get_curv_class(module: nn.Module, curv_type: str, curv_shape: str):
