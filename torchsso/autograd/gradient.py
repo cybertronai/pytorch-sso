@@ -68,14 +68,13 @@ def forward_postprocess(module, input, output):
 
 
 def grad_linear(module: nn.Module, data_input: torch.Tensor, grad_output: torch.Tensor):
-
     assert isinstance(module, nn.Linear)
     linear = module
     assert data_input.ndimension() == 2  # n x f_in
     assert grad_output.ndimension() == 2  # n x f_out
 
     if linear.weight.requires_grad:
-        grads = torch.einsum('bi,bj->bij', grad_output, data_input)  # n x f_out x f_in
+        grads = torch.bmm(grad_output.unsqueeze(2), data_input.unsqueeze(1))  # n x f_out x f_in
         setattr(linear.weight, 'grads', grads)  # n x f_out x f_in
 
     if linear.bias is not None and linear.bias.requires_grad:
@@ -92,7 +91,7 @@ def _grad_conv(module: nn.Module, data_input: torch.Tensor, grad_output: torch.T
         n, c_out = grad_output.size()[0:2]
         grad_output2d = grad_output.view(n, c_out, -1)  # n x c_out x output_size
 
-        grads_2d = torch.einsum('bik,bjk->bij', grad_output2d, input2d)  # n x c_out x (c_in)(kernel_size)
+        grads_2d = torch.bmm(grad_output2d, input2d.transpose(2, 1))  # n x c_out x (c_in)(kernel_size)
         setattr(module.weight, 'grads', grads_2d.view(n, *module.weight.size()))  # n x c_out x c_in x k_1 x ... x k_d
 
     if module.bias is not None and module.bias.requires_grad:
@@ -141,7 +140,7 @@ def _grad_conv_transpose(module: nn.Module, data_input: torch.Tensor, grad_outpu
         grad_output2d = im2col_func(grad_output, module)
 
         # n x c_in x (c_out)(kernel_size)
-        grads_2d = torch.einsum('bik,bjk->bij', input2d, grad_output2d)
+        grads_2d = torch.bmm(input2d, grad_output2d.transpose(2, 1))
         # n x c_in x c_out x k_h x k_w
         setattr(module.weight, 'grads', grads_2d.view(n, *module.weight.size()))
 
@@ -255,4 +254,5 @@ def grad_embedding(module: nn.Module, data_input: torch.Tensor, grad_output: tor
                            embedding.embedding_dim)
 
         setattr(embedding.weight, 'grads', grads)
+
 
