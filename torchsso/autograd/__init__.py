@@ -4,7 +4,7 @@ import warnings
 
 import torch.nn as nn
 from torchsso.autograd.utils import record_original_requires_grad
-from torchsso.autograd.operations import Operation
+from torchsso.autograd.operations import Operation, OP_KRON_COV, OP_DIAG_COV, OP_BATCH_GRADS  # NOQA
 from torchsso.autograd.fisher import fisher_for_cross_entropy, FISHER_EXACT, FISHER_MC, FISHER_EMP  # NOQA
 
 
@@ -42,7 +42,7 @@ def extend(model, op_names):
     # remove hooks and operations from modules
     for handle in handles:
         handle.remove()
-    for module in model.modules:
+    for module in model.modules():
         _remove_operations(module)
 
 

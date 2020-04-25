@@ -63,10 +63,10 @@ def move_op_results(model, dst_attr, scale=1., accumulate=False):
 
     def scaling(src):
         if isinstance(src, dict):
-            for s in zip(src.values()):
+            for s in src.values():
                 scaling(s)
         else:
-            assert isinstance(src, torch.Tensor)
+            assert isinstance(src, torch.Tensor), type(src)
             src.mul_(scale)
 
     def accumulation(src, dst):
@@ -74,8 +74,8 @@ def move_op_results(model, dst_attr, scale=1., accumulate=False):
             for s, d in zip(src.values(), dst.values()):
                 accumulation(s, d)
         else:
-            assert isinstance(src, torch.Tensor)
-            assert isinstance(dst, torch.Tensor)
+            assert isinstance(src, torch.Tensor), type(src)
+            assert isinstance(dst, torch.Tensor), type(dst)
             dst.add_(src)
 
     for module in model.modules():
