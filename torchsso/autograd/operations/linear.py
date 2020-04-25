@@ -12,22 +12,19 @@ class Linear(Operation):
 
     @staticmethod
     def diag_cov_weight(module, in_data, out_grads):
-        n = in_data.shape[0]
         in_in = in_data.mul(in_data)  # n x f_in
         grad_grad = out_grads.mul(out_grads)  # n x f_out
-        return torch.matmul(grad_grad.T, in_in).div(n)
+        return torch.matmul(grad_grad.T, in_in)  # f_out x f_in
 
     @staticmethod
     def diag_cov_bias(module, out_grads):
         grad_grad = out_grads.mul(out_grads)  # n x f_out
-        return grad_grad.mean(dim=0)  # f_out x 1
+        return grad_grad.sum(dim=0)  # f_out x 1
 
     @staticmethod
     def kron_cov_A(module, in_data):
-        n = in_data.shape[0]
-        return torch.matmul(in_data.T, in_data).div(n)  # f_in x f_in
+        return torch.matmul(in_data.T, in_data)  # f_in x f_in
 
     @staticmethod
     def kron_cov_B(module, out_grads):
-        n = out_grads.shape[0]
-        return torch.matmul(out_grads.T, out_grads).div(n)  # f_in x f_in
+        return torch.matmul(out_grads.T, out_grads)  # f_out x f_out

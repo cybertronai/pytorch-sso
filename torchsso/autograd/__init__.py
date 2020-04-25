@@ -2,11 +2,10 @@ from typing import List
 from contextlib import contextmanager
 import warnings
 
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torchsso.autograd import utils
-from torchsso.autograd import operations
+from torchsso.autograd.utils import record_original_requires_grad
+from torchsso.autograd.operations import Operation
+from torchsso.autograd.fisher import fisher_for_cross_entropy, FISHER_EXACT, FISHER_MC, FISHER_EMP  # NOQA
 
 
 @contextmanager
@@ -25,14 +24,16 @@ def extend(model, op_names):
         if out_data.requires_grad:
             handles.append(out_data.register_hook(backward_hook))
 
-    # register hooks and operations in modules
     for module in model.modules():
         if len(list(module.children())) > 0:
             continue
-        params = list(module.parameters())
-        params = [p for p in params if p.requires_grad]
-        if len(params) == 0:
+        requires_grad = False
+        for param in module.parameters():
+            requires_grad = requires_grad or param.requires_grad
+            record_original_requires_grad(param)
+        if not requires_grad:
             continue
+        # register hooks and operations in modules
         handles.append(module.register_forward_hook(forward_hook))
         _register_operations(module, op_names)
 
@@ -69,36 +70,4 @@ def _call_operations_in_backward(module, in_data, out_grads):
 def _remove_operations(module):
     if hasattr(module, 'operation'):
         delattr(module, 'operation')
-
-
-def fisher_cross_entropy(model, inputs, fisher_types,
-                         targets=None, requires_param_grad=True):
-    logits = model(inputs)
-    n_examples, n_classes = logits.shape
-
-    # empirical
-    if 'Emp' in fisher_types:
-        assert targets is not None
-        loss = F.cross_entropy(logits, targets)
-        if requires_param_grad:
-            loss.backward(retain_graph=True)
-        else:
-            with utils.disable_param_grad(model):
-                loss.backward(retain_graph=True)
-
-    probs = F.softmax(logits, dim=1)
-
-    if 'MC' in fisher_types:
-        dist = torch.distributions.Categorical(probs)
-        _targets = dist.sample((n_samples,))
-        # for-loop
-        with utils.disable_param_grad(model):
-            loss.backward(retain_graph=True)
-            # scale & accumulate results to somewhere
-
-    if 'Exact' in fisher_types:
-        # for-loop
-        with utils.disable_param_grad(model):
-            loss.backward(retain_graph=True)
-            # scale & accumulate results to somewhere
 
