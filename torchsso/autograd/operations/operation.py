@@ -46,9 +46,8 @@ class Operation:
         op_results = self.get_op_results()
 
         if self._grads_scale is not None:
-            scale = torch.sqrt(self.grads_scale)
             shape = (-1,) + (1,) * (out_grads.ndim - 1)
-            out_grads = torch.mul(out_grads, scale.reshape(shape))
+            out_grads = torch.mul(out_grads, self._grads_scale.reshape(shape))
 
         for op_name in self._op_names:
             if op_name == OP_KRON_COV:

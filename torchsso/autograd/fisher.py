@@ -36,10 +36,11 @@ def fisher_for_cross_entropy(model, inputs, fisher_types, compute_emp_param_grad
         if probs is None:
             probs = F.softmax(logits, dim=1)
         probs, _targets = torch.sort(probs, dim=1, descending=True)
+        sqrt_probs = torch.sqrt(probs)
         if top_n_classes is None:
             top_n_classes = n_classes
         for i in range(top_n_classes):
-            set_op_grads_scale(model, probs[:, i])
+            set_op_grads_scale(model, sqrt_probs[:, i])
             forward_and_backward(_targets[:, i])
             accumulate_op_results(model, FISHER_EXACT, scale=1/n_examples)
         set_op_grads_scale(model, None)
