@@ -96,7 +96,7 @@ class Operation:
 
     @staticmethod
     def batch_grads_bias(module, out_grads):
-        return out_grads
+        raise NotImplementedError
 
     @staticmethod
     def diag_weight(module, in_data, out_grads):

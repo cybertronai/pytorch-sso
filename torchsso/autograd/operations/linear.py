@@ -11,6 +11,10 @@ class Linear(Operation):
         return torch.bmm(out_grads.unsqueeze(2), in_data.unsqueeze(1))  # n x f_out x f_in
 
     @staticmethod
+    def batch_grads_bias(module, out_grads):
+        return out_grads
+
+    @staticmethod
     def diag_weight(module, in_data, out_grads):
         in_in = in_data.mul(in_data)  # n x f_in
         grad_grad = out_grads.mul(out_grads)  # n x f_out
