@@ -16,14 +16,14 @@ def fisher_for_cross_entropy(model, inputs, fisher_types, compute_emp_param_grad
     log_probs = F.log_softmax(logits, dim=1)
     probs = None
 
-    def forward_and_backward(target, compute_param_grad=False):
+    def forward_and_backward(target, compute_param_grad=False, retain_graph=True):
         model.zero_grad()
         loss = F.nll_loss(log_probs, target)
         if compute_param_grad:
-            loss.backward(retain_graph=True)
+            loss.backward(retain_graph=retain_graph)
         else:
             with disable_param_grad(model):
-                loss.backward(retain_graph=True)
+                loss.backward(retain_graph=retain_graph)
 
     if FISHER_MC in fisher_types:
         probs = F.softmax(logits, dim=1)
@@ -53,7 +53,7 @@ def fisher_for_cross_entropy(model, inputs, fisher_types, compute_emp_param_grad
 
     if FISHER_EMP in fisher_types:
         assert targets is not None
-        forward_and_backward(targets, compute_emp_param_grad)
+        forward_and_backward(targets, compute_emp_param_grad, retain_graph=False)
         move_op_results(model, FISHER_EMP, scale=1/n_examples)
 
 
