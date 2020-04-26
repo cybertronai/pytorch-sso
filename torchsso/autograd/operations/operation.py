@@ -1,5 +1,5 @@
 import torch
-from torchsso.autograd.utils import original_requires_grad, matrix_to_tril, extend_A_tril
+from torchsso.autograd.utils import original_requires_grad
 
 OP_KRON = 'kron'
 OP_DIAG = 'diag'
@@ -37,11 +37,8 @@ class Operation:
 
         if OP_KRON in self._op_names:
             A = self.kron_A(module, in_data)
-            A_tril = matrix_to_tril(A)  # save only lower triangular
-            if original_requires_grad(module, 'bias'):
-                A_tril = extend_A_tril(A_tril)
             op_results = self.get_op_results()
-            op_results[OP_KRON] = {'A_tril': A_tril}
+            op_results[OP_KRON] = {'A': A}
             self.set_op_results(op_results)
 
     def backward_pre_process(self, in_data, out_grads):
@@ -54,11 +51,10 @@ class Operation:
         for op_name in self._op_names:
             if op_name == OP_KRON:
                 B = self.kron_B(module, out_grads)
-                B_tril = matrix_to_tril(B)  # save only lower triangular
                 if OP_KRON in op_results:
-                    op_results[OP_KRON]['B_tril'] = B_tril
+                    op_results[OP_KRON]['B'] = B
                 else:
-                    op_results[OP_KRON] = {'B_tril': B_tril}
+                    op_results[OP_KRON] = {'B': B}
             else:
                 rst = getattr(self, f'{op_name}_weight')(module, in_data, out_grads)
                 op_results[op_name] = {'weight': rst}
