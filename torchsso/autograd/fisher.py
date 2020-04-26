@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import torch
 import torch.nn.functional as F
 from torchsso.autograd.utils import disable_param_grad
@@ -28,9 +29,11 @@ def fisher_for_cross_entropy(model, inputs, fisher_types, compute_emp_param_grad
         probs = F.softmax(logits, dim=1)
         dist = torch.distributions.Categorical(probs)
         _targets = dist.sample((n_mc_samples,))
-        for i in range(n_mc_samples):
-            forward_and_backward(_targets[i])
-            accumulate_op_results(model, FISHER_MC, scale=1/n_mc_samples/n_examples)
+        with accumulate_out_grads(model):
+            for i in range(n_mc_samples - 1):
+                forward_and_backward(_targets[i])
+        forward_and_backward(_targets[-1])
+        move_op_results(model, FISHER_MC, scale=1/n_mc_samples/n_examples)
 
     if FISHER_EXACT in fisher_types:
         if probs is None:
@@ -39,16 +42,36 @@ def fisher_for_cross_entropy(model, inputs, fisher_types, compute_emp_param_grad
         sqrt_probs = torch.sqrt(probs)
         if top_n_classes is None:
             top_n_classes = n_classes
-        for i in range(top_n_classes):
-            set_op_grads_scale(model, sqrt_probs[:, i])
-            forward_and_backward(_targets[:, i])
-            accumulate_op_results(model, FISHER_EXACT, scale=1/n_examples)
+        with accumulate_out_grads(model):
+            for i in range(top_n_classes - 1):
+                set_op_grads_scale(model, sqrt_probs[:, i])
+                forward_and_backward(_targets[:, i])
+        set_op_grads_scale(model, sqrt_probs[:, -1])
+        forward_and_backward(_targets[:, -1])
         set_op_grads_scale(model, None)
+        move_op_results(model, FISHER_EXACT, scale=1/n_examples)
 
     if FISHER_EMP in fisher_types:
         assert targets is not None
         forward_and_backward(targets, compute_emp_param_grad)
         move_op_results(model, FISHER_EMP, scale=1/n_examples)
+
+
+@contextmanager
+def accumulate_out_grads(model):
+    for module in model.modules():
+        operation = getattr(module, 'operation', None)
+        if operation is None:
+            continue
+        operation.turn_on_out_grads_accumulation()
+
+    yield
+
+    for module in model.modules():
+        operation = getattr(module, 'operation', None)
+        if operation is None:
+            continue
+        operation.turn_off_out_grads_accumulation()
 
 
 def set_op_grads_scale(model, scale):
@@ -92,7 +115,4 @@ def move_op_results(model, dst_attr, scale=1., accumulate=False):
             accumulation(src_results, dst_results)
         operation.delete_op_results()
 
-
-def accumulate_op_results(model, dst_attr, scale=1.):
-    move_op_results(model, dst_attr, scale, accumulate=True)
 
