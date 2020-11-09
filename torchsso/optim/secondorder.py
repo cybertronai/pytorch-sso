@@ -109,7 +109,7 @@ class SecondOrderOptimizer(Optimizer):
         self.update_inv = update_inv
         self.precondition_grad = precondition_grad
 
-        for module in model.modules():
+        for i, module in enumerate(model.modules()):
             if len(list(module.children())) > 0:
                 continue
             params = list(module.parameters())
@@ -126,12 +126,17 @@ class SecondOrderOptimizer(Optimizer):
                 'acc_grads': TensorAccumulator()
             }
 
+            if isinstance(l2_reg, list):
+                group['l2_reg'] = l2_reg[i]
+            else:
+                group['l2_reg'] = [torch.ones_like(p).mul(l2_reg) for p in group['params']]
+
             self.add_param_group(group)
             self.init_buffer(params)
 
             if non_reg_for_bn and \
                     isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
-                group['l2_reg'] = 0
+                group['l2_reg'] = [torch.zeros_like(p) for p in group['params']]
                 group['weight_decay'] = 0
                 group['normalizing_weights'] = False
 
@@ -235,12 +240,17 @@ class SecondOrderOptimizer(Optimizer):
         params = group[target]
         state = self.state
 
-        def apply_l2_reg(p, grad):
-            if group['l2_reg'] != 0:
+        def apply_l2_reg(p, grad, param_idx):
+            l2_reg = group['l2_reg'][param_idx]
+            if (l2_reg != 0).any():
                 if grad.is_sparse:
                     raise RuntimeError(
                         "l2 regularization option is not compatible with sparse gradients")
-                grad.add_(group['l2_reg'], p.data)
+                if 'prior_mean' in group:
+                    prior_mean = group['prior_mean'][param_idx]
+                    grad.addcmul_(l2_reg, p.data - prior_mean)
+                else:
+                    grad.add_(l2_reg, p.data)
                 curv = group['curv']
                 if curv is not None:
                     curv.l2_reg = group['l2_reg']
@@ -286,15 +296,14 @@ class SecondOrderOptimizer(Optimizer):
                 rate = d_norm / (g_norm + eps)
                 grad.mul_(rate)
 
-        for p in params:
-
+        for i, p in enumerate(params):
             grad = p.grad
 
             if grad is None:
                 continue
 
             if grad_type == 'raw':
-                apply_l2_reg(p, grad)
+                apply_l2_reg(p, grad, i)
 
             if grad_type == 'preconditioned':
                 apply_weight_decay(p, grad)

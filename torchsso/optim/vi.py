@@ -43,8 +43,8 @@ class VIOptimizer(SecondOrderOptimizer):
         kl_weighting (float, optional): KL weighting (https://arxiv.org/abs/1712.02390)
         warmup_kl_weighting_init (float, optional): initial KL weighting for warming up the value
         warmup_kl_weighting_steps (float, optional): number of steps until the value reaches the kl_weighting
-        prior_variance (float, optional): variance of the prior distribution (Gaussian) of each param
-        init_precision (float, optional): initial (diagonal) precision of the posterior of params
+        prior_precision (float, optional): precision of the prior distribution (Gaussian) of each param
+        init_prec_ema (float, optional): initial value of EMA of (diagonal) precision of the posterior of params
     """
 
     def __init__(self, model: nn.Module, dataset_size: float, curv_type: str, curv_shapes: dict, curv_kwargs: dict,
@@ -55,7 +55,7 @@ class VIOptimizer(SecondOrderOptimizer):
                  lars=False, lars_type='preconditioned',
                  num_mc_samples=10, val_num_mc_samples=10,
                  kl_weighting=1, warmup_kl_weighting_init=0.01, warmup_kl_weighting_steps=None,
-                 prior_variance=1, init_precision=None,
+                 prior_mean=0, prior_precision=1, init_prec_ema=None,
                  seed=1, total_steps=1000):
 
         if dataset_size < 0:
@@ -68,14 +68,25 @@ class VIOptimizer(SecondOrderOptimizer):
             raise ValueError("Invalid KL weighting: {}".format(kl_weighting))
         if warmup_kl_weighting_steps is not None and warmup_kl_weighting_init < 0:
             raise ValueError("Invalid initial KL weighting: {}".format(warmup_kl_weighting_init))
-        if prior_variance < 0:
-            raise ValueError("Invalid prior variance: {}".format(prior_variance))
-        if init_precision is not None and init_precision < 0:
-            raise ValueError("Invalid initial precision: {}".format(init_precision))
+        if prior_precision < 0:
+            raise ValueError("Invalid prior precision: {}".format(prior_precision))
+        if init_prec_ema is not None and init_prec_ema < 0:
+            raise ValueError("Invalid initial precision: {}".format(init_prec_ema))
 
         init_kl_weighting = kl_weighting if warmup_kl_weighting_steps is None else warmup_kl_weighting_init
-        l2_reg = init_kl_weighting / dataset_size / prior_variance if prior_variance != 0 else 0
-        std_scale = math.sqrt(init_kl_weighting / dataset_size)
+        scale = init_kl_weighting / dataset_size
+        std_scale = math.sqrt(scale)
+
+        if isinstance(prior_precision, list):
+            l2_reg = []
+            for i in range(len(prior_precision)):
+                assert isinstance(prior_precision[i], list)
+                l2_reg_i = []
+                for j in range(len(prior_precision[i])):
+                    l2_reg_i.append(scale * prior_precision[i][j])
+                l2_reg.append(l2_reg_i)
+        else:
+            l2_reg = scale * prior_precision
 
         super(VIOptimizer, self).__init__(model, curv_type, curv_shapes, curv_kwargs,
                                           lr=lr, momentum=momentum, momentum_type=momentum_type,
@@ -86,6 +97,7 @@ class VIOptimizer(SecondOrderOptimizer):
                                           bias_correction=bias_correction,
                                           lars=lars, lars_type=lars_type)
 
+        self.defaults['prior_mean'] = prior_mean
         self.defaults['std_scale'] = std_scale
         self.defaults['kl_weighting'] = kl_weighting
         self.defaults['warmup_kl_weighting_init'] = warmup_kl_weighting_init
@@ -95,15 +107,24 @@ class VIOptimizer(SecondOrderOptimizer):
         self.defaults['total_steps'] = total_steps
         self.defaults['seed_base'] = seed
 
-        for group in self.param_groups:
-            group['std_scale'] = 0 if group['l2_reg'] == 0 else std_scale
+        for i, group in enumerate(self.param_groups):
+            group['std_scale'] = 0 if not isinstance(group['l2_reg'], list) else std_scale
+            if isinstance(prior_mean, list):
+                group['prior_mean'] = prior_mean[i]
+            else:
+                group['prior_mean'] = [torch.ones_like(p).mul(prior_mean)
+                                       for p in group['params']]
             group['mean'] = [p.data.detach().clone() for p in group['params']]
             self.init_buffer(group['mean'])
 
-            if init_precision is not None:
-                curv = group['curv']
-                curv.element_wise_init(init_precision)
-                curv.step(update_std=(group['std_scale'] > 0))
+            curv = group['curv']
+            if init_prec_ema is not None:
+                if isinstance(init_prec_ema, list):
+                    curv.data = init_prec_ema[i]
+                    curv.step(update_std=(group['std_scale'] > 0))
+                else:
+                    curv.element_wise_init(init_prec_ema)
+                    curv.step(update_std=(group['std_scale'] > 0))
 
     def zero_grad(self):
         r"""Clears the gradients of all optimized :class:`torch.Tensor` s."""
@@ -163,11 +184,10 @@ class VIOptimizer(SecondOrderOptimizer):
         kl_weighting = init_kl + rate * (target_kl - init_kl)
 
         rate = kl_weighting / init_kl
-        l2_reg = rate * self.defaults['l2_reg']
         std_scale = math.sqrt(rate) * self.defaults['std_scale']
         for group in self.param_groups:
-            if group['l2_reg'] > 0:
-                group['l2_reg'] = l2_reg
+            if isinstance(group['l2_reg'], list):
+                group['l2_reg'] = [rate * l2_reg for l2_reg in group['l2_reg']]
             if group['std_scale'] > 0:
                 group['std_scale'] = std_scale
 

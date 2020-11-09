@@ -22,7 +22,7 @@
     "num_mc_samples": 4,
     "val_num_mc_samples": 0,
     "kl_weighting": 0.2,
-    "prior_variance": 1
+    "prior_precision": 1
   },
   "curv_args": {
     "damping": 1e-4,

@@ -1,0 +1,38 @@
+{
+  "dataset": "permuted_MNIST",
+  "nr_tasks": 10,
+  "epochs": 100,
+  "batch_size": 256,
+  "val_batch_size": 10000,
+  "arch_file": "models/mlp.py",
+  "arch_name": "MLP",
+  "arch_args": {
+    "hidden_sizes": [100, 100]
+  },
+  "optim_name": "VIOptimizer",
+  "optim_args": {
+    "curv_type": "Cov",
+    "curv_shapes": {
+      "Conv2d": "Diag",
+      "Linear": "Diag",
+      "BatchNorm1d": "Diag",
+      "BatchNorm2d": "Diag"
+    },
+    "lr": 0.001,
+    "grad_ema_decay": 1,
+    "grad_ema_type": "raw",
+    "num_mc_samples": 10,
+    "val_num_mc_samples": 100,
+    "kl_weighting": 1,
+    "prior_mean": 0,
+    "prior_precision": 1,
+    "init_prec_ema": 20,
+    "acc_steps": 1
+  },
+  "curv_args": {
+    "damping": 0,
+    "ema_decay": 0.001
+  },
+  "no_cuda": false,
+  "seed": 1
+}

@@ -37,8 +37,8 @@ class Curvature(object):
         self._module = module
         self.ema_decay = ema_decay
         self._damping = damping
-        self._l2_reg = 0
-        self._l2_reg_ema = 0
+        self._l2_reg = [torch.zeros_like(m) for m in module.parameters()]
+        self._l2_reg_ema = [torch.zeros_like(m) for m in module.parameters()]
 
         self._data = None
         self._acc_data = None
@@ -74,6 +74,10 @@ class Curvature(object):
     def device(self):
         return next(self._module.parameters()).device
 
+    @property
+    def dtype(self):
+        return next(self._module.parameters()).dtype
+
     def _get_shape(self):
         size = 0
         for p in self._module.parameters():
@@ -84,7 +88,7 @@ class Curvature(object):
     def element_wise_init(self, value):
         init_data = []
         for s in self.shape:
-            diag = torch.ones(s[0], device=self.device).mul(value)  # 1d
+            diag = torch.ones(s[0], device=self.device, dtype=self.dtype).mul(value)  # 1d
             diag = torch.diag(diag)  # 1d -> 2d
             init_data.append(diag)
 
@@ -101,7 +105,7 @@ class Curvature(object):
 
     @property
     def damping(self):
-        return self._damping + self._l2_reg_ema
+        return [l2_ema.add(self._damping) for l2_ema in self.l2_reg_ema]
 
     @property
     def l2_reg(self):
@@ -173,7 +177,9 @@ class Curvature(object):
 
     def update_ema(self):
         data = self.data
+        l2_reg = self.l2_reg
         ema = self.ema
+        l2_reg_ema = self.l2_reg_ema
         ema_max = self.ema_max
         beta = self.ema_decay
         if ema is None or beta == 1:
@@ -184,7 +190,8 @@ class Curvature(object):
         else:
             self.ema = [d.mul(beta).add(1 - beta, e)
                         for d, e in zip(data, ema)]
-            self._l2_reg_ema = self._l2_reg * beta + self._l2_reg_ema * (1 - beta)
+            self._l2_reg_ema = [l2.mul(beta).add(1 - beta, l2_ema)
+                                for l2, l2_ema in zip(l2_reg, l2_reg_ema)]
 
         if self.use_max_ema:
             for e, e_max in zip(self.ema, self.ema_max):
@@ -192,10 +199,10 @@ class Curvature(object):
 
     def update_inv(self):
         ema = self.ema if not self.use_max_ema else self.ema_max
-        self.inv = [self._inv(e) for e in ema]
+        self.inv = [self._inv(e, damp) for e, damp in zip(ema, self.damping)]
 
-    def _inv(self, X):
-        X_damp = add_value_to_diagonal(X, self.damping)
+    def _inv(self, X, damping):
+        X_damp = add_value_to_diagonal(X, damping)
 
         return torchsso.utils.inv(X_damp)
 
@@ -218,16 +225,16 @@ class DiagCurvature(Curvature):
         return tuple(p.shape for p in self.module.parameters())
 
     def element_wise_init(self, value):
-        self._data = [torch.ones(s, device=self.device).mul(value) for s in self.shape]
+        self._data = [torch.ones(s, device=self.device, dtype=self.dtype).mul(value) for s in self.shape]
 
     def update_in_backward(self, grad_output_data):
         raise NotImplementedError
 
-    def _inv(self, X):
+    def _inv(self, X, damping):
         if self.use_sqrt_ema:
             X = X.sqrt()
 
-        X_damp = X.add(X.new_ones(X.shape).mul(self.damping))
+        X_damp = X.add(damping)
 
         return 1 / X_damp
 
@@ -307,7 +314,8 @@ class KronCurvature(Curvature):
         else:
             pi = 1.
 
-        r = self.damping**0.5
+        damping = self.damping[0].mean()
+        r = damping**0.5
         self.inv = [torchsso.utils.inv(add_value_to_diagonal(X, value))
                     for X, value in zip([A, G], [r*pi, r/pi])]
 
