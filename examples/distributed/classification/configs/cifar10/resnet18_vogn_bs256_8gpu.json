@@ -28,7 +28,7 @@
         "num_mc_samples": 5,
         "val_num_mc_samples": 20,
         "kl_weighting": 1,
-        "prior_variance": 0.02,
+        "prior_precision": 50,
         "non_reg_for_bn": true
     },
     "curv_args": {

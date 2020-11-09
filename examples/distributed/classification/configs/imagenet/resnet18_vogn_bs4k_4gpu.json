@@ -30,7 +30,7 @@
     "num_mc_samples": 1,
     "val_num_mc_samples": 10,
     "kl_weighting": 1,
-    "prior_variance": 7.5e-4,
+    "prior_precision": 1333.33,
     "weight_decay": 0,
     "lars": false
   },

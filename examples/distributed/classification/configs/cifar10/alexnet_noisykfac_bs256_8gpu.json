@@ -25,7 +25,7 @@
         "kl_weighting": 1,
         "warmup_kl_weighting_init": 0.01,
         "warmup_kl_weighting_steps": 15821,
-        "prior_variance": 2
+        "prior_precision": 0.5
     },
     "curv_args": {
         "damping": 1e-3,

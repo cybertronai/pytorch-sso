@@ -28,7 +28,7 @@
     "num_mc_samples": 1,
     "val_num_mc_samples": 0,
     "kl_weighting": 1,
-    "prior_variance": 0.75,
+    "prior_precision": 1.33,
     "non_reg_for_bn": true,
     "acc_steps": 32
   },
